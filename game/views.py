@@ -25,6 +25,94 @@ from .services import (
     start_run,
 )
 
+ORIENTATION_MAX_STEP = 5
+
+
+def _sync_orientation_step(player: Player) -> None:
+    if player.orientation_completed:
+        player.orientation_step = ORIENTATION_MAX_STEP
+        return
+    if not player.orientation_device_type:
+        player.orientation_step = 1
+        return
+    if player.orientation_device_type == Player.OrientationDeviceType.OWN and not player.orientation_os:
+        player.orientation_step = 2
+        return
+    if not player.orientation_language:
+        player.orientation_step = 3
+        return
+    if player.orientation_step < 4:
+        player.orientation_step = 4
+
+
+def _update_orientation(player: Player, event: str, value: str) -> None:
+    if event == "toggle_collapsed":
+        player.orientation_collapsed = not player.orientation_collapsed
+        return
+
+    if event == "choose_device":
+        if value not in {Player.OrientationDeviceType.OWN, Player.OrientationDeviceType.UOL}:
+            return
+        player.orientation_device_type = value
+        player.orientation_os = None
+        player.orientation_language = None
+        player.orientation_completed = False
+        player.orientation_collapsed = False
+        player.orientation_step = 2 if value == Player.OrientationDeviceType.OWN else 3
+        return
+
+    if event == "choose_os":
+        if player.orientation_device_type != Player.OrientationDeviceType.OWN:
+            return
+        allowed = {
+            Player.OrientationOS.WINDOWS,
+            Player.OrientationOS.MAC,
+            Player.OrientationOS.CHROMEBOOK,
+            Player.OrientationOS.LINUX,
+        }
+        if value not in allowed:
+            return
+        player.orientation_os = value
+        if player.orientation_step < 3:
+            player.orientation_step = 3
+        return
+
+    if event == "choose_language":
+        if not player.orientation_device_type:
+            return
+        if player.orientation_device_type == Player.OrientationDeviceType.OWN and not player.orientation_os:
+            return
+        allowed = {
+            Player.OrientationLanguage.R,
+            Player.OrientationLanguage.PYTHON,
+            Player.OrientationLanguage.JAVASCRIPT,
+        }
+        if value not in allowed:
+            return
+        player.orientation_language = value
+        if player.orientation_step < 4:
+            player.orientation_step = 4
+        return
+
+    if event == "next_step":
+        _sync_orientation_step(player)
+        if player.orientation_step < ORIENTATION_MAX_STEP:
+            player.orientation_step += 1
+        return
+
+    if event == "complete":
+        _sync_orientation_step(player)
+        if player.orientation_device_type and player.orientation_language:
+            if player.orientation_device_type == Player.OrientationDeviceType.UOL or player.orientation_os:
+                player.orientation_completed = True
+                player.orientation_step = ORIENTATION_MAX_STEP
+                player.orientation_collapsed = True
+        return
+
+    if event == "reopen":
+        player.orientation_collapsed = False
+        return
+
 
 def home(request):
     return redirect("join")
@@ -61,6 +149,7 @@ def join_view(request):
 def play_view(request, user_id: int):
     player = get_object_or_404(Player.objects.select_related("run"), id=user_id)
     now = timezone.now()
+    _sync_orientation_step(player)
 
     if player.current_stage > FINAL_STAGE:
         current_stage = FINAL_STAGE
@@ -80,6 +169,23 @@ def play_view(request, user_id: int):
     if not player.is_complete:
         expected = StageCode.objects.filter(player=player, stage=current_stage).values_list("code", flat=True).first()
     checker_is_verified = (player.checker_verified_stage == current_stage)
+
+    if request.method == "POST" and request.POST.get("action") == "orientation_update":
+        event = request.POST.get("orientation_event", "").strip()
+        value = request.POST.get("orientation_value", "").strip().lower()
+        _update_orientation(player, event, value)
+        _sync_orientation_step(player)
+        player.save(
+            update_fields=[
+                "orientation_completed",
+                "orientation_collapsed",
+                "orientation_step",
+                "orientation_device_type",
+                "orientation_os",
+                "orientation_language",
+            ]
+        )
+        return redirect("play", user_id=player.id)
 
     if request.method == "POST" and request.POST.get("action") == "check_solution":
         if player.is_complete:
@@ -138,6 +244,11 @@ def play_view(request, user_id: int):
     checker_lock_seconds = 0
     if (not checker_is_verified) and player.checker_locked_until and player.checker_locked_until > now:
         checker_lock_seconds = max(1, int((player.checker_locked_until - now).total_seconds()))
+    orientation_is_open = not player.orientation_collapsed
+    orientation_pause_polling = orientation_is_open and not player.orientation_completed
+    orientation_can_choose_language = bool(player.orientation_device_type) and (
+        player.orientation_device_type != Player.OrientationDeviceType.OWN or bool(player.orientation_os)
+    )
 
     return render(
         request,
@@ -149,6 +260,9 @@ def play_view(request, user_id: int):
             "checker_is_verified": checker_is_verified,
             "checker_solution_code": expected if checker_is_verified else None,
             "checker_lock_seconds": checker_lock_seconds,
+            "orientation_is_open": orientation_is_open,
+            "orientation_pause_polling": orientation_pause_polling,
+            "orientation_can_choose_language": orientation_can_choose_language,
             "final_stage": FINAL_STAGE,
             "stage_count": STAGE_COUNT,
             "stage_group_sizes": STAGE_GROUP_SIZES,
@@ -381,6 +495,9 @@ def teacher_view(request):
                 return redirect("teacher")
         except Exception as exc:  # noqa: BLE001
             messages.error(request, f"Teacher action failed: {exc}")
+
+        # Post/Redirect/Get: avoid form re-submission prompts during auto-polling refreshes.
+        return redirect("teacher")
 
     run = Run.current()
     return _render_teacher(request, run=run)

@@ -75,7 +75,7 @@ class PodiumProgressionTests(TestCase):
         response = self.client.get("/podium")
         self.assertEqual(response.status_code, 200)
         self.assertNotContains(response, "Submitted by")
-        self.assertContains(response, "Latest Result")
+        self.assertContains(response, "AUGUR LOG")
         self.assertContains(response, "Resolved")
         self.assertContains(response, "Rejected")
         self.assertContains(response, "Stage 1")
@@ -145,10 +145,87 @@ class TeacherDashboardTests(TestCase):
         self.assertIsNone(run.collaboration_size_cap)
 
 
+class OrientationWalkthroughTests(TestCase):
+    def setUp(self):
+        self.run = Run.objects.create(name="run_orient", status=Run.Status.ACTIVE, is_current=True)
+        self.player = create_player(self.run, "orient")
+
+    def test_first_visit_starts_orientation_open_at_step_one(self):
+        response = self.client.get(f"/play/{self.player.id}")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "ORIENTATION")
+        self.assertContains(response, "Step 1.")
+        self.assertContains(response, "Tablet devices and mobile phones cannot be used")
+        self.assertNotContains(response, "Current stage:")
+        self.assertContains(response, "var pausePolling = true;")
+
+    def test_own_device_requires_os_before_language(self):
+        self.client.post(
+            f"/play/{self.player.id}",
+            {"action": "orientation_update", "orientation_event": "choose_device", "orientation_value": "own"},
+        )
+        self.player.refresh_from_db()
+        self.assertEqual(self.player.orientation_step, 2)
+        self.assertEqual(self.player.orientation_device_type, "own")
+
+        self.client.post(
+            f"/play/{self.player.id}",
+            {"action": "orientation_update", "orientation_event": "choose_language", "orientation_value": "python"},
+        )
+        self.player.refresh_from_db()
+        self.assertIsNone(self.player.orientation_language)
+        self.assertEqual(self.player.orientation_step, 2)
+
+        self.client.post(
+            f"/play/{self.player.id}",
+            {"action": "orientation_update", "orientation_event": "choose_os", "orientation_value": "windows"},
+        )
+        self.client.post(
+            f"/play/{self.player.id}",
+            {"action": "orientation_update", "orientation_event": "choose_language", "orientation_value": "python"},
+        )
+        self.player.refresh_from_db()
+        self.assertEqual(self.player.orientation_os, "windows")
+        self.assertEqual(self.player.orientation_language, "python")
+        self.assertEqual(self.player.orientation_step, 4)
+
+    def test_uol_flow_can_skip_os_and_complete_collapses(self):
+        self.client.post(
+            f"/play/{self.player.id}",
+            {"action": "orientation_update", "orientation_event": "choose_device", "orientation_value": "uol"},
+        )
+        self.client.post(
+            f"/play/{self.player.id}",
+            {"action": "orientation_update", "orientation_event": "choose_language", "orientation_value": "r"},
+        )
+        self.client.post(
+            f"/play/{self.player.id}",
+            {"action": "orientation_update", "orientation_event": "next_step"},
+        )
+        self.client.post(
+            f"/play/{self.player.id}",
+            {"action": "orientation_update", "orientation_event": "complete"},
+        )
+        self.player.refresh_from_db()
+        self.assertTrue(self.player.orientation_completed)
+        self.assertTrue(self.player.orientation_collapsed)
+        self.assertEqual(self.player.orientation_step, 5)
+
+        response = self.client.get(f"/play/{self.player.id}")
+        self.assertContains(response, "Orientation complete.")
+        self.assertContains(response, "Review Orientation")
+        self.assertContains(response, "Current stage:")
+        self.assertContains(response, "var pausePolling = false;")
+
+
 class PersonalCheckerTests(TestCase):
     def setUp(self):
         self.run = Run.objects.create(name="run_checker", status=Run.Status.ACTIVE, is_current=True)
         self.player = create_player(self.run, "checker")
+        self.player.orientation_completed = True
+        self.player.orientation_collapsed = True
+        self.player.orientation_step = 5
+        self.player.save(update_fields=["orientation_completed", "orientation_collapsed", "orientation_step"])
         self.current_code = StageCode.objects.get(player=self.player, stage=1).code
 
     def _expire_lock(self):

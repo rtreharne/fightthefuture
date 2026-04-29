@@ -11,7 +11,18 @@ class RunAdmin(admin.ModelAdmin):
 
 @admin.register(Player)
 class PlayerAdmin(admin.ModelAdmin):
-    list_display = ("id", "username", "run", "current_stage", "is_test_user", "joined_at")
+    list_display = (
+        "id",
+        "username",
+        "run",
+        "current_stage",
+        "orientation_completed",
+        "orientation_step",
+        "orientation_device_type",
+        "orientation_language",
+        "is_test_user",
+        "joined_at",
+    )
     list_filter = ("run", "current_stage", "is_test_user")
     search_fields = ("username", "username_key")
 

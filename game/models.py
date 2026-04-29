@@ -42,6 +42,21 @@ class Run(models.Model):
 
 
 class Player(models.Model):
+    class OrientationDeviceType(models.TextChoices):
+        OWN = "own", "Own Device"
+        UOL = "uol", "University of Liverpool Machine"
+
+    class OrientationOS(models.TextChoices):
+        WINDOWS = "windows", "Windows"
+        MAC = "mac", "Mac"
+        CHROMEBOOK = "chromebook", "Chromebook"
+        LINUX = "linux", "Linux"
+
+    class OrientationLanguage(models.TextChoices):
+        R = "r", "R"
+        PYTHON = "python", "Python"
+        JAVASCRIPT = "javascript", "JavaScript"
+
     run = models.ForeignKey(Run, on_delete=models.CASCADE, related_name="players")
     username = models.CharField(max_length=80)
     username_key = models.CharField(max_length=80)
@@ -63,6 +78,27 @@ class Player(models.Model):
         null=True,
         blank=True,
         validators=[MinValueValidator(1), MaxValueValidator(STAGE_COUNT)],
+    )
+    orientation_completed = models.BooleanField(default=False)
+    orientation_collapsed = models.BooleanField(default=False)
+    orientation_step = models.PositiveSmallIntegerField(default=1, validators=[MinValueValidator(1), MaxValueValidator(5)])
+    orientation_device_type = models.CharField(
+        max_length=12,
+        choices=OrientationDeviceType.choices,
+        null=True,
+        blank=True,
+    )
+    orientation_os = models.CharField(
+        max_length=16,
+        choices=OrientationOS.choices,
+        null=True,
+        blank=True,
+    )
+    orientation_language = models.CharField(
+        max_length=16,
+        choices=OrientationLanguage.choices,
+        null=True,
+        blank=True,
     )
 
     class Meta:

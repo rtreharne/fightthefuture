@@ -7,6 +7,10 @@
     background: var(--ink);
     color: var(--bg);
   }
+  .code-pick.used-code {
+    text-decoration: line-through;
+    opacity: 0.7;
+  }
   .code-pick {
     width: auto;
     min-width: 88px;
@@ -213,7 +217,7 @@
                     <div class="entry-item" data-username="{{ player.username|lower }}">
                       <button
                         type="button"
-                        class="code-pick"
+                        class="code-pick{% if player.current_stage > stage %} used-code{% endif %}"
                         data-stage="{{ stage }}"
                         data-code="{{ code_value }}"
                         data-key="{{ player.id }}-{{ stage }}"

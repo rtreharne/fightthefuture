@@ -1,7 +1,30 @@
 {% extends "game/base.html" %}
 
 {% block content %}
+<style>
+  .orientation-grid {
+    display: grid;
+    gap: 8px;
+  }
+  .orientation-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .orientation-actions form {
+    display: inline-block;
+  }
+  .orientation-actions button {
+    width: auto;
+  }
+  .orientation-note {
+    border: 1px solid var(--line);
+    padding: 8px;
+  }
+</style>
+{% if player.orientation_completed %}
 <div class="panel">
+  <h2 style="margin-top: 0;">AUGUR PERSONAL TERMINAL</h2>
   <p>
     Player: <strong>{{ player.username }}</strong>
   </p>
@@ -57,12 +80,186 @@
     </div>
   {% endif %}
 </div>
+<div class="panel">
+  <h2 style="margin-top: 0; margin-bottom: 0;">ORIENTATION</h2>
+  <p class="muted">Orientation complete.</p>
+  <form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="orientation_update">
+    <input type="hidden" name="orientation_event" value="reopen">
+    <button type="submit" class="alt">Review Orientation</button>
+  </form>
+</div>
+{% else %}
+<div class="panel">
+  <div style="display: flex; justify-content: space-between; gap: 8px; align-items: center;">
+    <h2 style="margin-top: 0; margin-bottom: 0;">ORIENTATION</h2>
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="orientation_update">
+      <input type="hidden" name="orientation_event" value="toggle_collapsed">
+      <button type="submit" class="alt" style="width: auto;">
+        {% if orientation_is_open %}Minimize{% else %}Expand{% endif %}
+      </button>
+    </form>
+  </div>
+
+  {% if not orientation_is_open %}
+    <p class="muted">Orientation in progress (step {{ player.orientation_step }}/5).</p>
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="orientation_update">
+      <input type="hidden" name="orientation_event" value="reopen">
+      <button type="submit">Re-open Orientation</button>
+    </form>
+  {% else %}
+    <div class="orientation-grid">
+      <div class="orientation-note">
+        <strong>Need help?</strong> If any step does not work, ask the facilitator for help.
+      </div>
+
+      <div class="panel" style="margin-bottom: 0;">
+        <p><strong>Step 1.</strong> Are you using your own laptop or a University of Liverpool machine?</p>
+        <p class="warning">Tablet devices and mobile phones cannot be used for this activity.</p>
+        <div class="orientation-actions">
+          <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="orientation_update">
+            <input type="hidden" name="orientation_event" value="choose_device">
+            <input type="hidden" name="orientation_value" value="own">
+            <button type="submit" class="{% if player.orientation_device_type == 'own' %}alt{% endif %}">Own laptop</button>
+          </form>
+          <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="orientation_update">
+            <input type="hidden" name="orientation_event" value="choose_device">
+            <input type="hidden" name="orientation_value" value="uol">
+            <button type="submit" class="{% if player.orientation_device_type == 'uol' %}alt{% endif %}">University of Liverpool machine</button>
+          </form>
+        </div>
+      </div>
+
+      {% if player.orientation_device_type == "own" %}
+      <div class="panel" style="margin-bottom: 0;">
+        <p><strong>Step 2.</strong> Select your operating system and install VS Code.</p>
+        <div class="orientation-actions">
+          {% for os_value, os_label in player.OrientationOS.choices %}
+          <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="orientation_update">
+            <input type="hidden" name="orientation_event" value="choose_os">
+            <input type="hidden" name="orientation_value" value="{{ os_value }}">
+            <button type="submit" class="{% if player.orientation_os == os_value %}alt{% endif %}">{{ os_label }}</button>
+          </form>
+          {% endfor %}
+        </div>
+        <p>Install VS Code from <a href="https://code.visualstudio.com/download" target="_blank" rel="noopener">code.visualstudio.com/download</a>.</p>
+        {% if player.orientation_os == "windows" %}
+          <p class="muted">Windows: download the User Installer and run it.</p>
+        {% elif player.orientation_os == "mac" %}
+          <p class="muted">Mac: download for macOS, drag VS Code to Applications.</p>
+        {% elif player.orientation_os == "chromebook" %}
+          <p class="muted">Chromebook: enable Linux development, then install VS Code Linux build.</p>
+        {% elif player.orientation_os == "linux" %}
+          <p class="muted">Linux: install from the `.deb`/`.rpm` package on the download page.</p>
+        {% endif %}
+      </div>
+      {% endif %}
+
+      {% if orientation_can_choose_language %}
+      <div class="panel" style="margin-bottom: 0;">
+        <p><strong>Step 3.</strong> Choose your preferred language and check installation in VS Code terminal.</p>
+        {% if player.orientation_device_type == "uol" %}
+          <div class="orientation-note">
+            <p style="margin-top: 0;"><strong>University of Liverpool machine setup:</strong></p>
+            <ol>
+              <li>Open <code>Install University Applications</code> from the Windows search.</li>
+              <li>Install <code>Visual Studio Code</code>.</li>
+              <li>In the same app, check <code>R 4.5.2</code> and install it if needed.</li>
+              <li>Open VS Code, then open Extensions (<code>Ctrl + Shift + X</code>).</li>
+              <li>If you are using R, install the <code>R</code> extension by <code>REditorSupport</code>.</li>
+              <li>Open terminal in VS Code: <code>Terminal &gt; New Terminal</code>.</li>
+              <li>For R on PowerShell, run:<br><code>Remove-Item Alias:r -Force -ErrorAction SilentlyContinue; R --version</code></li>
+            </ol>
+            <p class="muted" style="margin-bottom: 0;">If software is unavailable in Install University Applications, ask the facilitator for help.</p>
+          </div>
+        {% endif %}
+        <div class="orientation-actions">
+          {% for language_value, language_label in player.OrientationLanguage.choices %}
+          <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="orientation_update">
+            <input type="hidden" name="orientation_event" value="choose_language">
+            <input type="hidden" name="orientation_value" value="{{ language_value }}">
+            <button type="submit" class="{% if player.orientation_language == language_value %}alt{% endif %}">{{ language_label }}</button>
+          </form>
+          {% endfor %}
+        </div>
+
+        {% if player.orientation_language == "r" %}
+          <p>Terminal check: <code>R --version</code></p>
+          <p>If missing: install R from <a href="https://cran.r-project.org/" target="_blank" rel="noopener">CRAN</a>.</p>
+          <p>Recommended VS Code extension: <strong>REditorSupport</strong> (search Extensions panel).</p>
+        {% elif player.orientation_language == "python" %}
+          <p>Terminal check: <code>python --version</code> (fallback <code>python3 --version</code>)</p>
+          <p>If missing: install from <a href="https://www.python.org/downloads/" target="_blank" rel="noopener">python.org/downloads</a>.</p>
+        {% elif player.orientation_language == "javascript" %}
+          <p>Terminal check: <code>node --version</code></p>
+          <p>If missing: install Node.js from <a href="https://nodejs.org/en/download" target="_blank" rel="noopener">nodejs.org/download</a>.</p>
+        {% endif %}
+      </div>
+      {% endif %}
+
+      {% if player.orientation_language %}
+      <div class="panel" style="margin-bottom: 0;">
+        <p><strong>Step 4.</strong> In VS Code, open chat with <code>Ctrl + Shift + I</code>, type any message, then log in to GitHub when prompted. If needed, create a GitHub account first.</p>
+        {% if player.orientation_step < 5 %}
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="orientation_update">
+          <input type="hidden" name="orientation_event" value="next_step">
+          <button type="submit">I completed Step 4</button>
+        </form>
+        {% endif %}
+      </div>
+      {% endif %}
+
+      {% if player.orientation_step >= 5 and player.orientation_language %}
+      <div class="panel" style="margin-bottom: 0;">
+        <p><strong>Step 5.</strong> Create and run a test script.</p>
+        {% if player.orientation_language == "r" %}
+          <p>Prompt: create <code>hello.R</code> that prints <code>Hello from R</code>.</p>
+          <p>Run in terminal: <code>Rscript hello.R</code></p>
+        {% elif player.orientation_language == "python" %}
+          <p>Prompt: create <code>hello.py</code> that prints <code>Hello from Python</code>.</p>
+          <p>Run in terminal: <code>python hello.py</code> (or <code>python3 hello.py</code>)</p>
+        {% elif player.orientation_language == "javascript" %}
+          <p>Prompt: create <code>hello.js</code> that logs <code>Hello from JavaScript</code>.</p>
+          <p>Run in terminal: <code>node hello.js</code></p>
+        {% endif %}
+        <p class="muted">You can run scripts from the VS Code terminal.</p>
+        {% if not player.orientation_completed %}
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="orientation_update">
+          <input type="hidden" name="orientation_event" value="complete">
+          <button type="submit">Mark Orientation Complete</button>
+        </form>
+        {% endif %}
+      </div>
+      {% endif %}
+    </div>
+  {% endif %}
+</div>
+{% endif %}
 
 <script>
   (function () {
     var intervalMs = 10000;
     var tick = function () {
       if (document.hidden) return;
+      var pausePolling = {{ orientation_pause_polling|yesno:"true,false" }};
+      if (pausePolling) return;
       var active = document.activeElement;
       var tag = active && active.tagName ? active.tagName.toLowerCase() : "";
       if (tag === "input" || tag === "textarea" || tag === "select") return;
