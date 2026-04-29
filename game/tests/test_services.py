@@ -90,6 +90,19 @@ class MatchingEngineTests(TestCase):
         self.assertEqual(len(stage4), 1)
         self.assertEqual(set(stage4[0].player_ids), {p.id for p in players})
 
+    def test_collaboration_cap_overrides_default_stage_sizes(self):
+        self.run.collaboration_size_cap = 2
+        self.run.save(update_fields=["collaboration_size_cap"])
+        a = self._create_player_with_stage_code("cap_a", 1, 111111)
+        b = self._create_player_with_stage_code("cap_b", 1, 222222)
+
+        matches = find_matching_groups(self.run, 333333)
+        stage1 = [m for m in matches if m.stage == 1]
+
+        self.assertEqual(len(stage1), 1)
+        self.assertEqual(stage1[0].required_size, 2)
+        self.assertEqual(set(stage1[0].player_ids), {a.id, b.id})
+
 
 class AmbiguityResolutionTests(TestCase):
     def setUp(self):

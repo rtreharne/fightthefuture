@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import timedelta
 from io import StringIO
 
 from django.conf import settings
@@ -7,16 +8,17 @@ from django.contrib import messages
 from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils import timezone
 
 from .constants import FINAL_STAGE, STAGE_COUNT, STAGE_DETAILS, STAGE_GROUP_SIZES
 from .models import Player, PodiumSubmission, Run, StageCode
 from .services import (
     archive_current_run,
-    compute_stage_sum,
     create_player,
     create_test_users,
     pause_current_run,
     process_podium_submission,
+    required_group_size,
     reset_with_archive,
     resolve_pending_submission,
     resume_current_run,
@@ -36,8 +38,12 @@ def join_view(request):
         if not run:
             messages.error(request, "No current run. Ask the teacher to start a run.")
         else:
+            username_clean = username.strip()
+            existing_player = Player.objects.filter(run=run, username_key=username_clean.lower()).first()
+            if existing_player:
+                return redirect("play", user_id=existing_player.id)
             try:
-                player = create_player(run, username)
+                player = create_player(run, username_clean)
             except Exception as exc:  # noqa: BLE001
                 messages.error(request, f"Could not join: {exc}")
             else:
@@ -54,11 +60,7 @@ def join_view(request):
 
 def play_view(request, user_id: int):
     player = get_object_or_404(Player.objects.select_related("run"), id=user_id)
-
-    stage_codes = {
-        stage_code.stage: stage_code.code
-        for stage_code in StageCode.objects.filter(player=player).order_by("stage")
-    }
+    now = timezone.now()
 
     if player.current_stage > FINAL_STAGE:
         current_stage = FINAL_STAGE
@@ -67,6 +69,76 @@ def play_view(request, user_id: int):
         current_stage = player.current_stage
         stage_info = STAGE_DETAILS[current_stage]
 
+    # Stage progression resets checker lockout state.
+    if player.checker_stage and player.checker_stage != current_stage:
+        player.checker_fail_count = 0
+        player.checker_locked_until = None
+        player.checker_stage = current_stage
+        player.save(update_fields=["checker_fail_count", "checker_locked_until", "checker_stage"])
+
+    expected = None
+    if not player.is_complete:
+        expected = StageCode.objects.filter(player=player, stage=current_stage).values_list("code", flat=True).first()
+    checker_is_verified = (player.checker_verified_stage == current_stage)
+
+    if request.method == "POST" and request.POST.get("action") == "check_solution":
+        if player.is_complete:
+            messages.info(request, "You already completed all stages.")
+            return redirect("play", user_id=player.id)
+
+        if player.checker_stage != current_stage:
+            player.checker_stage = current_stage
+            player.checker_fail_count = 0
+            player.checker_locked_until = None
+            player.save(update_fields=["checker_stage", "checker_fail_count", "checker_locked_until"])
+
+        if checker_is_verified:
+            messages.info(request, "Solution already verified for this stage.")
+            return redirect("play", user_id=player.id)
+
+        if player.checker_locked_until and player.checker_locked_until > now:
+            remaining = max(1, int((player.checker_locked_until - now).total_seconds()))
+            messages.error(request, f"Checker locked. Try again in {remaining} seconds.")
+            return redirect("play", user_id=player.id)
+
+        submitted_raw = request.POST.get("personal_code", "").strip()
+        if not submitted_raw.isdigit():
+            messages.error(request, "Enter a numeric code.")
+            return redirect("play", user_id=player.id)
+
+        if expected is None:
+            messages.error(request, "No code found for your current stage.")
+            return redirect("play", user_id=player.id)
+
+        submitted = int(submitted_raw)
+        if submitted == expected:
+            player.checker_fail_count = 0
+            player.checker_locked_until = None
+            player.checker_stage = current_stage
+            player.checker_verified_stage = current_stage
+            player.save(update_fields=["checker_fail_count", "checker_locked_until", "checker_stage", "checker_verified_stage"])
+            messages.success(request, "Correct. Enter your code into the podium.")
+            return redirect("play", user_id=player.id)
+
+        player.checker_fail_count += 1
+        if player.checker_fail_count == 1:
+            lock_seconds = 30
+        elif player.checker_fail_count == 2:
+            lock_seconds = 60
+        else:
+            lock_seconds = 120
+        player.checker_locked_until = now + timedelta(seconds=lock_seconds)
+        player.checker_stage = current_stage
+        player.save(update_fields=["checker_fail_count", "checker_locked_until", "checker_stage"])
+
+        direction = "too low" if submitted < expected else "too high"
+        messages.error(request, f"Incorrect: {direction}. Wait {lock_seconds} seconds.")
+        return redirect("play", user_id=player.id)
+
+    checker_lock_seconds = 0
+    if (not checker_is_verified) and player.checker_locked_until and player.checker_locked_until > now:
+        checker_lock_seconds = max(1, int((player.checker_locked_until - now).total_seconds()))
+
     return render(
         request,
         "game/play.html",
@@ -74,11 +146,12 @@ def play_view(request, user_id: int):
             "player": player,
             "stage_info": stage_info,
             "current_stage": current_stage,
-            "stage_codes": stage_codes,
+            "checker_is_verified": checker_is_verified,
+            "checker_solution_code": expected if checker_is_verified else None,
+            "checker_lock_seconds": checker_lock_seconds,
             "final_stage": FINAL_STAGE,
             "stage_count": STAGE_COUNT,
             "stage_group_sizes": STAGE_GROUP_SIZES,
-            "stage_rules": [(stage, STAGE_GROUP_SIZES[stage]) for stage in range(1, STAGE_COUNT + 1)],
         },
     )
 
@@ -129,11 +202,10 @@ def podium_view(request):
             messages.error(request, "No current run is available.")
         elif action == "submit":
             raw_code = request.POST.get("code", "").strip()
-            submitted_by = request.POST.get("submitted_by", "").strip()
             if not raw_code.isdigit():
                 messages.error(request, "Code must be numeric.")
             else:
-                submission, matches = process_podium_submission(run, int(raw_code), submitted_by=submitted_by)
+                submission, matches = process_podium_submission(run, int(raw_code), submitted_by="")
                 latest_submission = submission
                 if submission.status == PodiumSubmission.Status.PENDING:
                     return redirect(f"{reverse('podium')}?submission={submission.id}")
@@ -165,12 +237,34 @@ def podium_view(request):
     candidate_stage_options: list[int] = []
     candidates = []
     run_players = []
+    submission_log = []
     if run:
         run_players = list(run.players.order_by("current_stage", "username", "id"))
+        submissions = list(run.submissions.order_by("-submitted_at"))
+        for submission in submissions:
+            if submission.status == PodiumSubmission.Status.ACCEPTED:
+                status_label = "Resolved"
+            elif submission.status == PodiumSubmission.Status.INVALID:
+                status_label = "Rejected"
+            else:
+                status_label = "Pending"
+
+            stage_completed = f"Stage {submission.stage}" if submission.stage else "-"
+            progressed = ", ".join(submission.progressed_usernames) if submission.progressed_usernames else "-"
+            submission_log.append(
+                {
+                    "id": submission.id,
+                    "timestamp": submission.submitted_at,
+                    "code": submission.submitted_sum,
+                    "status_label": status_label,
+                    "stage_completed": stage_completed,
+                    "progressed_usernames": progressed,
+                }
+            )
     if pending_submission:
         candidates = list(pending_submission.candidates.order_by("id"))
         candidate_stage_options = sorted({candidate.stage for candidate in candidates})
-    candidate_stage_rows = [(stage, STAGE_GROUP_SIZES[stage]) for stage in candidate_stage_options]
+    candidate_stage_rows = [(stage, required_group_size(run, stage)) for stage in candidate_stage_options] if run else []
 
     return render(
         request,
@@ -183,6 +277,7 @@ def podium_view(request):
             "candidates": candidates,
             "candidate_stage_rows": candidate_stage_rows,
             "run_players": run_players,
+            "submission_log": submission_log,
             "stage_group_sizes": STAGE_GROUP_SIZES,
         },
     )
@@ -192,7 +287,7 @@ def _teacher_authenticated(request) -> bool:
     return bool(request.session.get("teacher_authenticated", False))
 
 
-def _render_teacher(request, run, computed_sum=None, selected_stage=None, selected_user_ids=None):
+def _render_teacher(request, run):
     players = []
     stage_codes = {}
     if run:
@@ -208,12 +303,10 @@ def _render_teacher(request, run, computed_sum=None, selected_stage=None, select
             "run": run,
             "players": players,
             "stage_codes": stage_codes,
-            "computed_sum": computed_sum,
-            "selected_stage": selected_stage,
-            "selected_user_ids": set(selected_user_ids or []),
             "stage_group_sizes": STAGE_GROUP_SIZES,
             "stage_count": STAGE_COUNT,
             "stage_numbers": range(1, STAGE_COUNT + 1),
+            "collaboration_size_cap": run.collaboration_size_cap if run else None,
         },
     )
 
@@ -231,9 +324,6 @@ def teacher_view(request):
         return _render_teacher(request, run=Run.current())
 
     run = Run.current()
-    computed_sum = None
-    selected_stage = None
-    selected_user_ids: list[int] = []
 
     if request.method == "POST":
         action = request.POST.get("action", "")
@@ -268,14 +358,24 @@ def teacher_view(request):
                     else:
                         created = create_test_users(run, n_users)
                         messages.success(request, f"Created {len(created)} test users.")
-            elif action == "compute_sum":
+            elif action == "set_collaboration_cap":
                 if not run:
                     messages.error(request, "No current run.")
                 else:
-                    selected_stage = int(request.POST.get("stage", "1"))
-                    selected_user_ids = [int(item) for item in request.POST.getlist("selected_user_ids")]
-                    computed_sum = compute_stage_sum(run, selected_stage, selected_user_ids)
-                    messages.info(request, f"Stage {selected_stage} sum computed.")
+                    cap_value = int(request.POST.get("collaboration_size_cap", "0"))
+                    if cap_value < 1 or cap_value > 8:
+                        messages.error(request, "Collaboration cap must be between 1 and 8.")
+                    else:
+                        run.collaboration_size_cap = cap_value
+                        run.save(update_fields=["collaboration_size_cap"])
+                        messages.success(request, f"Collaboration size override set to {cap_value}.")
+            elif action == "clear_collaboration_cap":
+                if not run:
+                    messages.error(request, "No current run.")
+                else:
+                    run.collaboration_size_cap = None
+                    run.save(update_fields=["collaboration_size_cap"])
+                    messages.success(request, "Collaboration size override cleared.")
             elif action == "logout_teacher":
                 request.session["teacher_authenticated"] = False
                 return redirect("teacher")
@@ -283,10 +383,4 @@ def teacher_view(request):
             messages.error(request, f"Teacher action failed: {exc}")
 
     run = Run.current()
-    return _render_teacher(
-        request,
-        run=run,
-        computed_sum=computed_sum,
-        selected_stage=selected_stage,
-        selected_user_ids=selected_user_ids,
-    )
+    return _render_teacher(request, run=run)

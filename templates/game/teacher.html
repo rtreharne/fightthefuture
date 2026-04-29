@@ -2,6 +2,106 @@
 {% load game_extras %}
 
 {% block content %}
+<style>
+  .code-pick.selected-code {
+    background: var(--ink);
+    color: var(--bg);
+  }
+  .code-pick {
+    width: auto;
+    min-width: 88px;
+    min-height: 28px;
+    padding: 4px 8px;
+    max-width: 100%;
+    white-space: normal;
+    word-break: break-word;
+  }
+  .entry-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .entry-item.hidden-entry {
+    display: none;
+  }
+  #username-filter {
+    max-width: 280px;
+  }
+  .table-scroll.fit-mobile table {
+    min-width: 0;
+    table-layout: fixed;
+  }
+  .teacher-code-table th:first-child,
+  .teacher-code-table td:first-child {
+    width: 88px;
+    white-space: nowrap;
+  }
+  .sum-overlay {
+    position: fixed;
+    right: 10px;
+    bottom: 10px;
+    width: 220px;
+    border: 1px solid var(--line);
+    background: var(--bg);
+    padding: 8px;
+    z-index: 20;
+  }
+  .sum-overlay-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+  .sum-overlay-head strong {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+  }
+  .sum-toggle-btn {
+    width: auto;
+    min-height: 24px;
+    padding: 2px 8px;
+    line-height: 1;
+  }
+  .sum-overlay table {
+    font-size: 12px;
+  }
+  .sum-overlay td, .sum-overlay th {
+    padding: 3px 4px;
+  }
+  .sum-overlay.minimized .sum-overlay-body {
+    display: none;
+  }
+  .sum-overlay-spacer {
+    height: 220px;
+  }
+  @media (max-width: 720px) {
+    .table-scroll.fit-mobile {
+      overflow-x: visible;
+    }
+    .teacher-code-table th:first-child,
+    .teacher-code-table td:first-child {
+      width: 64px;
+      padding-right: 4px;
+    }
+    .code-pick {
+      min-width: 0;
+      min-height: 24px;
+      padding: 3px 6px;
+      font-size: 12px;
+    }
+    .sum-overlay {
+      right: 6px;
+      bottom: 6px;
+      width: 190px;
+      padding: 6px;
+    }
+    .sum-overlay-spacer {
+      height: 200px;
+    }
+  }
+</style>
 {% if not authed %}
 <div class="panel">
   <h2 style="margin-top: 0;">Teacher Access</h2>
@@ -18,9 +118,26 @@
   <h2 style="margin-top: 0;">Facilitator Dashboard</h2>
   {% if run %}
     <p>Current run: <strong>{{ run.name }}</strong> | Status: <strong>{{ run.get_status_display }}</strong></p>
+    <p>Collaboration override: <strong>{% if collaboration_size_cap %}{{ collaboration_size_cap }}{% else %}default 1/2/4/8/8{% endif %}</strong></p>
   {% else %}
     <p class="warning">No current run is active.</p>
   {% endif %}
+
+  <div class="panel">
+    <h3 style="margin-top: 0;">Collaboration Size</h3>
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="set_collaboration_cap">
+      <label for="collaboration_size_cap">Override size (1-8)</label>
+      <input id="collaboration_size_cap" name="collaboration_size_cap" type="number" min="1" max="8" required>
+      <button type="submit">Set Override</button>
+    </form>
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="clear_collaboration_cap">
+      <button type="submit" class="alt">Use Default Stage Sizes</button>
+    </form>
+  </div>
 
   <div class="grid">
     <form method="post">
@@ -73,69 +190,155 @@
 </div>
 
 <div class="panel">
-  <h3 style="margin-top: 0;">Running Sum Tool</h3>
-  <form method="post">
-    {% csrf_token %}
-    <input type="hidden" name="action" value="compute_sum">
-
-    <label for="stage">Stage</label>
-    <select id="stage" name="stage">
-      {% for stage in stage_numbers %}
-        <option value="{{ stage }}" {% if selected_stage == stage %}selected{% endif %}>
-          Stage {{ stage }}
-        </option>
-      {% endfor %}
-    </select>
-
-    <div class="grid" style="margin: 12px 0;">
-      {% for player in players %}
-        <label>
-          <input type="checkbox" name="selected_user_ids" value="{{ player.id }}" {% if player.id in selected_user_ids %}checked{% endif %}>
-          {{ player.username }} (id {{ player.id }})
-        </label>
-      {% endfor %}
-    </div>
-
-    <button type="submit">Compute Running Sum</button>
-  </form>
-
-  {% if computed_sum is not None %}
-    <p><strong>Result:</strong> <code>{{ computed_sum }}</code></p>
-  {% endif %}
-</div>
-
-<div class="panel">
   <h3 style="margin-top: 0;">Players and Pre-determined Codes</h3>
-  <table>
+  <label for="username-filter">Filter by username</label>
+  <input id="username-filter" type="text" placeholder="username1;username2">
+  <div class="table-scroll fit-mobile">
+  <table class="teacher-code-table">
     <thead>
       <tr>
-        <th>ID</th>
-        <th>Username</th>
-        <th>Current Stage</th>
-        <th>S1</th>
-        <th>S2</th>
-        <th>S3</th>
-        <th>S4</th>
-        <th>S5</th>
+        <th>Stage</th>
+        <th>Username - Code</th>
       </tr>
     </thead>
     <tbody>
-      {% for player in players %}
-        <tr>
-          <td>{{ player.id }}</td>
-          <td>{{ player.username }}</td>
-          <td>{{ player.current_stage }}</td>
-          <td><code>{{ stage_codes|get_item:player.id|get_item:1 }}</code></td>
-          <td><code>{{ stage_codes|get_item:player.id|get_item:2 }}</code></td>
-          <td><code>{{ stage_codes|get_item:player.id|get_item:3 }}</code></td>
-          <td><code>{{ stage_codes|get_item:player.id|get_item:4 }}</code></td>
-          <td><code>{{ stage_codes|get_item:player.id|get_item:5 }}</code></td>
+      {% for stage in stage_numbers %}
+        <tr class="stage-row">
+          <td>Stage {{ stage }}</td>
+          <td>
+            <div class="entry-list">
+              {% for player in players %}
+                {% with code_value=stage_codes|get_item:player.id|get_item:stage %}
+                  {% if code_value %}
+                    <div class="entry-item" data-username="{{ player.username|lower }}">
+                      <button
+                        type="button"
+                        class="code-pick"
+                        data-stage="{{ stage }}"
+                        data-code="{{ code_value }}"
+                        data-key="{{ player.id }}-{{ stage }}"
+                      >{{ player.username }} - {{ code_value }}</button>
+                    </div>
+                  {% endif %}
+                {% endwith %}
+              {% endfor %}
+            </div>
+          </td>
         </tr>
       {% empty %}
-        <tr><td colspan="8">No users yet.</td></tr>
+        <tr><td colspan="2">No users yet.</td></tr>
       {% endfor %}
     </tbody>
   </table>
+  </div>
 </div>
+<div id="running-sum-box" class="sum-overlay">
+  <div class="sum-overlay-head">
+    <strong>Running Sums</strong>
+    <button type="button" id="sum-toggle-btn" class="sum-toggle-btn" aria-expanded="true">-</button>
+  </div>
+  <div class="sum-overlay-body">
+    <p style="margin-top: 0;">Click codes to add/remove.</p>
+    <table>
+      <thead>
+        <tr><th>Stage</th><th>Sum</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>S1</td><td><code id="sum-stage-1">0</code></td></tr>
+        <tr><td>S2</td><td><code id="sum-stage-2">0</code></td></tr>
+        <tr><td>S3</td><td><code id="sum-stage-3">0</code></td></tr>
+        <tr><td>S4</td><td><code id="sum-stage-4">0</code></td></tr>
+        <tr><td>S5</td><td><code id="sum-stage-5">0</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+<div class="sum-overlay-spacer" aria-hidden="true"></div>
+<script>
+  (function () {
+    var buttons = document.querySelectorAll(".code-pick");
+    var filterInput = document.getElementById("username-filter");
+    var stageRows = document.querySelectorAll(".stage-row");
+    var overlay = document.getElementById("running-sum-box");
+    var toggleBtn = document.getElementById("sum-toggle-btn");
+    if (!buttons.length) return;
+
+    var selected = new Set();
+    var sums = {1: 0, 2: 0, 3: 0, 4: 0, 5: 0};
+
+    var render = function () {
+      for (var stage = 1; stage <= 5; stage += 1) {
+        var el = document.getElementById("sum-stage-" + stage);
+        if (el) el.textContent = String(sums[stage]);
+      }
+    };
+
+    buttons.forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var key = btn.dataset.key;
+        var stage = parseInt(btn.dataset.stage || "0", 10);
+        var code = parseInt(btn.dataset.code || "0", 10);
+        if (!key || stage < 1 || stage > 5 || Number.isNaN(code)) return;
+
+        if (selected.has(key)) {
+          selected.delete(key);
+          sums[stage] -= code;
+          btn.classList.remove("selected-code");
+        } else {
+          selected.add(key);
+          sums[stage] += code;
+          btn.classList.add("selected-code");
+        }
+        render();
+      });
+    });
+
+    if (filterInput) {
+      filterInput.addEventListener("input", function () {
+        var query = (filterInput.value || "").toLowerCase();
+        var terms = query
+          .split(";")
+          .map(function (item) { return item.trim(); })
+          .filter(function (item) { return item.length > 0; });
+        stageRows.forEach(function (row) {
+          var visibleCount = 0;
+          var entries = row.querySelectorAll(".entry-item");
+          entries.forEach(function (entry) {
+            var username = entry.dataset.username || "";
+            var visible = terms.length === 0 || terms.some(function (term) {
+              return username.indexOf(term) !== -1;
+            });
+            entry.classList.toggle("hidden-entry", !visible);
+            if (visible) visibleCount += 1;
+          });
+          row.style.display = visibleCount > 0 ? "" : "none";
+        });
+      });
+    }
+
+    if (overlay && toggleBtn) {
+      toggleBtn.addEventListener("click", function () {
+        var minimized = overlay.classList.toggle("minimized");
+        toggleBtn.textContent = minimized ? "+" : "-";
+        toggleBtn.setAttribute("aria-expanded", minimized ? "false" : "true");
+      });
+    }
+
+    render();
+  })();
+</script>
+<script>
+  (function () {
+    var intervalMs = 10000;
+    var tick = function () {
+      if (document.hidden) return;
+      var active = document.activeElement;
+      var tag = active && active.tagName ? active.tagName.toLowerCase() : "";
+      if (tag === "input" || tag === "textarea" || tag === "select") return;
+      window.location.reload();
+    };
+    setInterval(tick, intervalMs);
+  })();
+</script>
 {% endif %}
 {% endblock %}

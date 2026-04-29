@@ -16,6 +16,11 @@ class Run(models.Model):
     name = models.CharField(max_length=100, blank=True)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.ACTIVE)
     is_current = models.BooleanField(default=False, db_index=True)
+    collaboration_size_cap = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(1), MaxValueValidator(8)],
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     archived_at = models.DateTimeField(null=True, blank=True)
 
@@ -47,6 +52,18 @@ class Player(models.Model):
     is_test_user = models.BooleanField(default=False)
     joined_at = models.DateTimeField(auto_now_add=True)
     completed_at = models.DateTimeField(null=True, blank=True)
+    checker_fail_count = models.PositiveSmallIntegerField(default=0)
+    checker_locked_until = models.DateTimeField(null=True, blank=True)
+    checker_stage = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(1), MaxValueValidator(STAGE_COUNT)],
+    )
+    checker_verified_stage = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(1), MaxValueValidator(STAGE_COUNT)],
+    )
 
     class Meta:
         constraints = [
@@ -102,6 +119,7 @@ class PodiumSubmission(models.Model):
     stage = models.PositiveSmallIntegerField(null=True, blank=True)
     required_size = models.PositiveSmallIntegerField(null=True, blank=True)
     resolved_manually = models.BooleanField(default=False)
+    progressed_usernames = models.JSONField(default=list)
     message = models.TextField(blank=True)
     submitted_at = models.DateTimeField(auto_now_add=True)
     resolved_at = models.DateTimeField(null=True, blank=True)

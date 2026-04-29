@@ -2,54 +2,74 @@
 
 {% block content %}
 <div class="panel">
-  <h2 style="margin-top: 0;">Player Dashboard</h2>
   <p>
-    Player: <strong>{{ player.username }}</strong> (id <code>{{ player.id }}</code>)<br>
-    Run: <strong>{{ player.run.name }}</strong>
+    Player: <strong>{{ player.username }}</strong>
   </p>
 
   {% if player.is_complete %}
     <p><strong>All 5 stages completed.</strong></p>
-    <p class="muted">You can still inspect your stage codes below.</p>
+    <p class="muted">You can still submit with your team at the podium.</p>
   {% else %}
     <p>Current stage: <strong>{{ current_stage }}</strong></p>
     <div class="panel" style="padding: 12px;">
-      <h3 style="margin-top: 0;">{{ stage_info.title }}</h3>
       <p>{{ stage_info.instructions }}</p>
-      <p>
-        <a href="/play/{{ player.id }}/dataset/{{ current_stage }}">Download Stage {{ current_stage }} dataset</a>
-      </p>
-      <form>
-        <label>Personal solution checker (placeholder)</label>
-        <input type="text" disabled value="Checker to be implemented later">
-      </form>
+      {% if checker_is_verified %}
+        <p><strong>Correct solution:</strong> <code>{{ checker_solution_code }}</code></p>
+      {% else %}
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="check_solution">
+          <label for="personal_code">Personal solution checker</label>
+          <input
+            id="personal_code"
+            name="personal_code"
+            type="text"
+            inputmode="numeric"
+            pattern="[0-9]*"
+            {% if checker_lock_seconds > 0 %}disabled{% endif %}
+            required
+          >
+          <button type="submit" {% if checker_lock_seconds > 0 %}disabled{% endif %}>Check</button>
+        </form>
+        {% if checker_lock_seconds > 0 %}
+          <p class="warning">
+            Wait <strong id="checker-countdown" data-seconds="{{ checker_lock_seconds }}">{{ checker_lock_seconds }}</strong> seconds before next attempt.
+          </p>
+          <script>
+            (function () {
+              var el = document.getElementById("checker-countdown");
+              if (!el) return;
+              var remaining = parseInt(el.dataset.seconds || "0", 10);
+              if (Number.isNaN(remaining) || remaining < 0) remaining = 0;
+              var tick = function () {
+                remaining = Math.max(0, remaining - 1);
+                el.textContent = String(remaining);
+                if (remaining <= 0) {
+                  clearInterval(timer);
+                  window.location.reload();
+                }
+              };
+              var timer = setInterval(tick, 1000);
+            })();
+          </script>
+        {% endif %}
+      {% endif %}
     </div>
   {% endif %}
 </div>
 
-<div class="panel">
-  <h3 style="margin-top: 0;">Progress Rules</h3>
-  <ul>
-    {% for stage, group_size in stage_rules %}
-      <li>Stage {{ stage }}: group size {{ group_size }}.</li>
-    {% endfor %}
-  </ul>
-</div>
+<script>
+  (function () {
+    var intervalMs = 10000;
+    var tick = function () {
+      if (document.hidden) return;
+      var active = document.activeElement;
+      var tag = active && active.tagName ? active.tagName.toLowerCase() : "";
+      if (tag === "input" || tag === "textarea" || tag === "select") return;
+      window.location.reload();
+    };
+    setInterval(tick, intervalMs);
+  })();
+</script>
 
-<div class="panel">
-  <h3 style="margin-top: 0;">Your Pre-determined Stage Codes</h3>
-  <table>
-    <thead>
-      <tr><th>Stage</th><th>Code</th></tr>
-    </thead>
-    <tbody>
-      {% for stage, code in stage_codes.items %}
-        <tr>
-          <td>{{ stage }}</td>
-          <td><code>{{ code }}</code></td>
-        </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</div>
 {% endblock %}

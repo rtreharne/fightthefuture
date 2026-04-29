@@ -18,16 +18,19 @@ MAX_MATCHES = 300
 @dataclass(frozen=True)
 class MatchGroup:
     stage: int
+    required_size: int
     player_ids: tuple[int, ...]
     player_usernames: tuple[str, ...]
-
-    @property
-    def required_size(self) -> int:
-        return STAGE_GROUP_SIZES[self.stage]
 
 
 def normalize_username(username: str) -> str:
     return username.strip()
+
+
+def required_group_size(run: Run, stage: int) -> int:
+    if run.collaboration_size_cap:
+        return int(run.collaboration_size_cap)
+    return STAGE_GROUP_SIZES[stage]
 
 
 def create_new_current_run() -> Run:
@@ -234,15 +237,23 @@ def _matching_indices(codes: list[int], target: int, group_size: int, limit: int
         return _size_four_matches(codes, target, limit)
     if group_size == 8:
         return _size_eight_matches(codes, target, limit)
-    raise ValueError(f"Unsupported group size: {group_size}")
+
+    results: list[tuple[int, ...]] = []
+    for combo in itertools.combinations(range(len(codes)), group_size):
+        if sum(codes[idx] for idx in combo) == target:
+            results.append(combo)
+            if len(results) >= limit:
+                return results
+    return results
 
 
 def find_matching_groups(run: Run, submitted_sum: int, limit: int = MAX_MATCHES) -> list[MatchGroup]:
     matches: list[MatchGroup] = []
 
-    for stage, group_size in STAGE_GROUP_SIZES.items():
+    for stage in range(1, STAGE_COUNT + 1):
         if len(matches) >= limit:
             break
+        group_size = required_group_size(run, stage)
 
         entries = _stage_entries(run, stage)
         if len(entries) < group_size:
@@ -257,6 +268,7 @@ def find_matching_groups(run: Run, submitted_sum: int, limit: int = MAX_MATCHES)
             matches.append(
                 MatchGroup(
                     stage=stage,
+                    required_size=group_size,
                     player_ids=tuple(player.id for player in selected_players),
                     player_usernames=tuple(player.username for player in selected_players),
                 )
@@ -269,7 +281,7 @@ def find_matching_groups(run: Run, submitted_sum: int, limit: int = MAX_MATCHES)
 
 
 def _validate_stage_group(run: Run, stage: int, player_ids: list[int], submitted_sum: int) -> list[Player]:
-    expected_size = STAGE_GROUP_SIZES[stage]
+    expected_size = required_group_size(run, stage)
     selected_ids = sorted(set(player_ids))
     if len(selected_ids) != expected_size:
         raise ValueError(f"Stage {stage} requires exactly {expected_size} players")
@@ -357,6 +369,7 @@ def process_podium_submission(run: Run, submitted_sum: int, submitted_by: str = 
                 stage=match.stage,
                 required_size=match.required_size,
                 resolved_manually=False,
+                progressed_usernames=[player.username for player in players],
                 message="Code accepted and progress applied.",
                 resolved_at=now,
             )
@@ -401,8 +414,9 @@ def resolve_pending_submission(submission: PodiumSubmission, stage: int, player_
 
         submission.status = PodiumSubmission.Status.ACCEPTED
         submission.stage = stage
-        submission.required_size = STAGE_GROUP_SIZES[stage]
+        submission.required_size = required_group_size(run, stage)
         submission.resolved_manually = True
+        submission.progressed_usernames = [player.username for player in players]
         submission.message = "Ambiguous code resolved manually and progress applied."
         submission.resolved_at = now
         submission.save(
@@ -411,6 +425,7 @@ def resolve_pending_submission(submission: PodiumSubmission, stage: int, player_
                 "stage",
                 "required_size",
                 "resolved_manually",
+                "progressed_usernames",
                 "message",
                 "resolved_at",
             ]

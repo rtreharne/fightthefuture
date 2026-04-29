@@ -12,32 +12,11 @@
   <form method="post" class="panel" style="padding: 12px;">
     {% csrf_token %}
     <input type="hidden" name="action" value="submit">
-    <label for="submitted_by">Submitted by (optional)</label>
-    <input id="submitted_by" type="text" name="submitted_by" maxlength="80" placeholder="team-alpha">
-
     <label for="code">Code sum</label>
     <input id="code" type="text" name="code" required placeholder="6+ digit sum">
     <button type="submit">Submit Code</button>
   </form>
 </div>
-
-{% if latest_submission %}
-<div class="panel">
-  <h3 style="margin-top: 0;">Latest Result</h3>
-  <p>
-    Submission <code>#{{ latest_submission.id }}</code>: {{ latest_submission.get_status_display }}<br>
-    Message: {{ latest_submission.message }}
-  </p>
-
-  {% if matches %}
-    <ul>
-      {% for match in matches %}
-        <li>Stage {{ match.stage }}: {{ match.player_usernames|join:", " }}</li>
-      {% endfor %}
-    </ul>
-  {% endif %}
-</div>
-{% endif %}
 
 {% if pending_submission %}
 <div class="panel">
@@ -70,7 +49,7 @@
       {% for player in run_players %}
         <label>
           <input type="checkbox" name="member_ids" value="{{ player.id }}">
-          {{ player.username }} (id {{ player.id }}, current stage {{ player.current_stage }})
+          {{ player.username }} (current stage {{ player.current_stage }})
         </label>
       {% endfor %}
     </div>
@@ -79,4 +58,15 @@
   </form>
 </div>
 {% endif %}
+
+<div class="panel">
+  <h3 style="margin-top: 0;">AUGUR LOG</h3>
+  <div style="font-family: monospace;">
+    {% for item in submission_log %}
+      <div class="log-line">[{{ item.timestamp|date:"H:i:s" }}] code={{ item.code }} | {{ item.status_label }} | completed={{ item.stage_completed }} | progressed={{ item.progressed_usernames }}</div>
+    {% empty %}
+      <div>No submissions yet.</div>
+    {% endfor %}
+  </div>
+</div>
 {% endblock %}
