@@ -1,0 +1,82 @@
+{% extends "game/base.html" %}
+
+{% block content %}
+<div class="panel">
+  <h2 style="margin-top: 0;">Podium</h2>
+  {% if run %}
+    <p>Run: <strong>{{ run.name }}</strong> | Status: <strong>{{ run.get_status_display }}</strong></p>
+  {% else %}
+    <p class="warning">No current run available.</p>
+  {% endif %}
+
+  <form method="post" class="panel" style="padding: 12px;">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="submit">
+    <label for="submitted_by">Submitted by (optional)</label>
+    <input id="submitted_by" type="text" name="submitted_by" maxlength="80" placeholder="team-alpha">
+
+    <label for="code">Code sum</label>
+    <input id="code" type="text" name="code" required placeholder="6+ digit sum">
+    <button type="submit">Submit Code</button>
+  </form>
+</div>
+
+{% if latest_submission %}
+<div class="panel">
+  <h3 style="margin-top: 0;">Latest Result</h3>
+  <p>
+    Submission <code>#{{ latest_submission.id }}</code>: {{ latest_submission.get_status_display }}<br>
+    Message: {{ latest_submission.message }}
+  </p>
+
+  {% if matches %}
+    <ul>
+      {% for match in matches %}
+        <li>Stage {{ match.stage }}: {{ match.player_usernames|join:", " }}</li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+</div>
+{% endif %}
+
+{% if pending_submission %}
+<div class="panel">
+  <h3 style="margin-top: 0;">Resolve Ambiguous Submission #{{ pending_submission.id }}</h3>
+  <p>Submitted sum: <code>{{ pending_submission.submitted_sum }}</code></p>
+
+  {% if candidates %}
+    <p>Auto-detected candidate groups:</p>
+    <ul>
+      {% for candidate in candidates %}
+        <li>Stage {{ candidate.stage }}: {{ candidate.player_usernames|join:", " }}</li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+
+  <form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="resolve">
+    <input type="hidden" name="submission_id" value="{{ pending_submission.id }}">
+
+    <label for="stage">Stage</label>
+    <select id="stage" name="stage" required>
+      {% for stage, size in candidate_stage_rows %}
+        <option value="{{ stage }}">Stage {{ stage }} (size {{ size }})</option>
+      {% endfor %}
+    </select>
+
+    <p>Select exact group members for that stage:</p>
+    <div class="grid">
+      {% for player in run_players %}
+        <label>
+          <input type="checkbox" name="member_ids" value="{{ player.id }}">
+          {{ player.username }} (id {{ player.id }}, current stage {{ player.current_stage }})
+        </label>
+      {% endfor %}
+    </div>
+    <p class="muted">Only valid stage-aligned groups with the correct sum will be accepted.</p>
+    <button type="submit">Resolve Submission</button>
+  </form>
+</div>
+{% endif %}
+{% endblock %}

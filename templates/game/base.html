@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Fight The Future</title>
+  <style>
+    :root {
+      --bg: #f5f6f8;
+      --panel: #ffffff;
+      --ink: #1a2533;
+      --accent: #135ad6;
+      --warn: #b95600;
+      --ok: #116b34;
+      --err: #b72828;
+      --line: #d6dce4;
+    }
+    body {
+      margin: 0;
+      font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+      background: linear-gradient(180deg, #eff4fa 0%, #f8f9fb 100%);
+      color: var(--ink);
+    }
+    .wrap {
+      max-width: 1060px;
+      margin: 0 auto;
+      padding: 24px 16px 48px;
+    }
+    header {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+    nav a {
+      color: var(--accent);
+      text-decoration: none;
+      margin-right: 12px;
+      font-weight: 600;
+    }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 16px;
+      margin-bottom: 14px;
+    }
+    .messages {
+      list-style: none;
+      padding: 0;
+      margin: 0 0 16px 0;
+    }
+    .messages li {
+      border-radius: 6px;
+      padding: 9px 11px;
+      margin-bottom: 8px;
+      border: 1px solid var(--line);
+      background: #fff;
+    }
+    .messages li.success { border-color: #b8dfc4; background: #eef9f1; color: var(--ok); }
+    .messages li.error { border-color: #f0b3b3; background: #fff0f0; color: var(--err); }
+    .messages li.info { border-color: #b7d2f4; background: #edf4ff; color: #164d99; }
+    .grid {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+    th, td {
+      border: 1px solid var(--line);
+      padding: 7px;
+      text-align: left;
+      vertical-align: top;
+    }
+    input, select, button {
+      font: inherit;
+      padding: 7px 9px;
+      border-radius: 6px;
+      border: 1px solid var(--line);
+    }
+    button {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+      cursor: pointer;
+    }
+    button.alt {
+      background: #fff;
+      color: var(--ink);
+      border-color: var(--line);
+    }
+    code {
+      background: #edf1f6;
+      border-radius: 5px;
+      padding: 2px 6px;
+    }
+    .muted { color: #576677; }
+    .list-inline {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 0;
+      margin: 0;
+      list-style: none;
+    }
+    .badge {
+      background: #e8eff9;
+      border: 1px solid #bdd0ee;
+      border-radius: 999px;
+      padding: 4px 9px;
+      font-size: 12px;
+    }
+    .warning { color: var(--warn); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1 style="margin: 0;">Fight The Future</h1>
+      <nav>
+        <a href="/join">Join</a>
+        <a href="/podium">Podium</a>
+        <a href="/teacher">Teacher</a>
+      </nav>
+    </header>
+
+    {% if messages %}
+      <ul class="messages">
+        {% for message in messages %}
+          <li class="{{ message.tags }}">{{ message }}</li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+
+    {% block content %}{% endblock %}
+  </div>
+</body>
+</html>

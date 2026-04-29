@@ -1,0 +1,141 @@
+{% extends "game/base.html" %}
+{% load game_extras %}
+
+{% block content %}
+{% if not authed %}
+<div class="panel">
+  <h2 style="margin-top: 0;">Teacher Access</h2>
+  <form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="teacher_login">
+    <label for="passcode">Passcode</label>
+    <input id="passcode" name="passcode" type="password" required>
+    <button type="submit">Enter</button>
+  </form>
+</div>
+{% else %}
+<div class="panel">
+  <h2 style="margin-top: 0;">Facilitator Dashboard</h2>
+  {% if run %}
+    <p>Current run: <strong>{{ run.name }}</strong> | Status: <strong>{{ run.get_status_display }}</strong></p>
+  {% else %}
+    <p class="warning">No current run is active.</p>
+  {% endif %}
+
+  <div class="grid">
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="start_run">
+      <button type="submit">Start Run</button>
+    </form>
+
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="pause_run">
+      <button type="submit" class="alt">Pause Run</button>
+    </form>
+
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="resume_run">
+      <button type="submit" class="alt">Resume Run</button>
+    </form>
+
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="archive_run">
+      <button type="submit" class="alt">Archive Run</button>
+    </form>
+
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="reset_run">
+      <button type="submit">Archive + Reset</button>
+    </form>
+
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="logout_teacher">
+      <button type="submit" class="alt">Logout</button>
+    </form>
+  </div>
+</div>
+
+<div class="panel">
+  <h3 style="margin-top: 0;">Create Test Set</h3>
+  <form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="create_test_users">
+    <label for="n_users">n users</label>
+    <input id="n_users" name="n_users" type="number" min="1" max="200" required>
+    <button type="submit">Create test001...testNNN</button>
+  </form>
+</div>
+
+<div class="panel">
+  <h3 style="margin-top: 0;">Running Sum Tool</h3>
+  <form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="compute_sum">
+
+    <label for="stage">Stage</label>
+    <select id="stage" name="stage">
+      {% for stage in stage_numbers %}
+        <option value="{{ stage }}" {% if selected_stage == stage %}selected{% endif %}>
+          Stage {{ stage }}
+        </option>
+      {% endfor %}
+    </select>
+
+    <div class="grid" style="margin: 12px 0;">
+      {% for player in players %}
+        <label>
+          <input type="checkbox" name="selected_user_ids" value="{{ player.id }}" {% if player.id in selected_user_ids %}checked{% endif %}>
+          {{ player.username }} (id {{ player.id }})
+        </label>
+      {% endfor %}
+    </div>
+
+    <button type="submit">Compute Running Sum</button>
+  </form>
+
+  {% if computed_sum is not None %}
+    <p><strong>Result:</strong> <code>{{ computed_sum }}</code></p>
+  {% endif %}
+</div>
+
+<div class="panel">
+  <h3 style="margin-top: 0;">Players and Pre-determined Codes</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Username</th>
+        <th>Current Stage</th>
+        <th>S1</th>
+        <th>S2</th>
+        <th>S3</th>
+        <th>S4</th>
+        <th>S5</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for player in players %}
+        <tr>
+          <td>{{ player.id }}</td>
+          <td>{{ player.username }}</td>
+          <td>{{ player.current_stage }}</td>
+          <td><code>{{ stage_codes|get_item:player.id|get_item:1 }}</code></td>
+          <td><code>{{ stage_codes|get_item:player.id|get_item:2 }}</code></td>
+          <td><code>{{ stage_codes|get_item:player.id|get_item:3 }}</code></td>
+          <td><code>{{ stage_codes|get_item:player.id|get_item:4 }}</code></td>
+          <td><code>{{ stage_codes|get_item:player.id|get_item:5 }}</code></td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="8">No users yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}

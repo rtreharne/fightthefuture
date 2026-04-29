@@ -1,0 +1,55 @@
+{% extends "game/base.html" %}
+
+{% block content %}
+<div class="panel">
+  <h2 style="margin-top: 0;">Player Dashboard</h2>
+  <p>
+    Player: <strong>{{ player.username }}</strong> (id <code>{{ player.id }}</code>)<br>
+    Run: <strong>{{ player.run.name }}</strong>
+  </p>
+
+  {% if player.is_complete %}
+    <p><strong>All 5 stages completed.</strong></p>
+    <p class="muted">You can still inspect your stage codes below.</p>
+  {% else %}
+    <p>Current stage: <strong>{{ current_stage }}</strong></p>
+    <div class="panel" style="padding: 12px;">
+      <h3 style="margin-top: 0;">{{ stage_info.title }}</h3>
+      <p>{{ stage_info.instructions }}</p>
+      <p>
+        <a href="/play/{{ player.id }}/dataset/{{ current_stage }}">Download Stage {{ current_stage }} dataset</a>
+      </p>
+      <form>
+        <label>Personal solution checker (placeholder)</label>
+        <input type="text" disabled value="Checker to be implemented later">
+      </form>
+    </div>
+  {% endif %}
+</div>
+
+<div class="panel">
+  <h3 style="margin-top: 0;">Progress Rules</h3>
+  <ul>
+    {% for stage, group_size in stage_rules %}
+      <li>Stage {{ stage }}: group size {{ group_size }}.</li>
+    {% endfor %}
+  </ul>
+</div>
+
+<div class="panel">
+  <h3 style="margin-top: 0;">Your Pre-determined Stage Codes</h3>
+  <table>
+    <thead>
+      <tr><th>Stage</th><th>Code</th></tr>
+    </thead>
+    <tbody>
+      {% for stage, code in stage_codes.items %}
+        <tr>
+          <td>{{ stage }}</td>
+          <td><code>{{ code }}</code></td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

@@ -50,3 +50,11 @@ secrets.*
 # -----------------------------
 renv/library/
 packrat/lib*/
+
+# -----------------------------
+# Python / Django artifacts
+# -----------------------------
+__pycache__/
+*.pyc
+db.sqlite3
+staticfiles/
