@@ -23,6 +23,24 @@ class MatchGroup:
     player_usernames: tuple[str, ...]
 
 
+def _format_name_list(usernames: list[str]) -> str:
+    if not usernames:
+        return ""
+    if len(usernames) == 1:
+        return usernames[0]
+    if len(usernames) == 2:
+        return f"{usernames[0]} and {usernames[1]}"
+    return f"{', '.join(usernames[:-1])} and {usernames[-1]}"
+
+
+def _progress_message(stage: int, usernames: list[str]) -> str:
+    stage_label = f"stage {stage}"
+    if stage == 1 and usernames:
+        return f"{usernames[0]} has successfully completed {stage_label} and progressed."
+    names = _format_name_list(usernames)
+    return f"{names} have worked together to complete {stage_label} and progressed."
+
+
 def normalize_username(username: str) -> str:
     return username.strip()
 
@@ -352,6 +370,7 @@ def process_podium_submission(run: Run, submitted_sum: int, submitted_by: str = 
         match = matches[0]
         with transaction.atomic():
             players = _validate_stage_group(run, match.stage, list(match.player_ids), submitted_sum=submitted_sum)
+            progressed_usernames = [player.username for player in players]
             now = timezone.now()
             for player in players:
                 if match.stage >= FINAL_STAGE:
@@ -369,8 +388,8 @@ def process_podium_submission(run: Run, submitted_sum: int, submitted_by: str = 
                 stage=match.stage,
                 required_size=match.required_size,
                 resolved_manually=False,
-                progressed_usernames=[player.username for player in players],
-                message="Code accepted and progress applied.",
+                progressed_usernames=progressed_usernames,
+                message=_progress_message(match.stage, progressed_usernames),
                 resolved_at=now,
             )
         return submission, [match]
@@ -403,6 +422,7 @@ def resolve_pending_submission(submission: PodiumSubmission, stage: int, player_
 
     with transaction.atomic():
         players = _validate_stage_group(run, stage, player_ids, submitted_sum=submission.submitted_sum)
+        progressed_usernames = [player.username for player in players]
         now = timezone.now()
         for player in players:
             if stage >= FINAL_STAGE:
@@ -416,8 +436,8 @@ def resolve_pending_submission(submission: PodiumSubmission, stage: int, player_
         submission.stage = stage
         submission.required_size = required_group_size(run, stage)
         submission.resolved_manually = True
-        submission.progressed_usernames = [player.username for player in players]
-        submission.message = "Ambiguous code resolved manually and progress applied."
+        submission.progressed_usernames = progressed_usernames
+        submission.message = _progress_message(stage, progressed_usernames)
         submission.resolved_at = now
         submission.save(
             update_fields=[

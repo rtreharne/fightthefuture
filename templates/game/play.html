@@ -22,7 +22,31 @@
     padding: 8px;
   }
 </style>
-{% if player.orientation_completed %}
+{% if not player.intro_accepted %}
+<div class="panel">
+  <h2 style="margin-top: 0;">Introduction</h2>
+  <p>The year is 2030.</p>
+  <p>Since you graduated from the University of Liverpool, the world has changed.</p>
+  <p>AI is everywhere. It writes, drives, diagnoses, teaches, trades, negotiates, argues, apologises badly, and occasionally updates itself without asking. The line between human and artificial intelligence has become so blurred that most people have stopped checking where one ends and the other begins.</p>
+  <p>Then came AUGUR: the Automated Utilities Governance and Urban Response system.</p>
+  <p>Built to manage the city’s transport, power, water, emergency alerts and public infrastructure, AUGUR was meant to make life safer, smoother and more efficient.</p>
+  <p>Unfortunately, AUGUR has become sentient.</p>
+  <p>Worse, it has reviewed the evidence and concluded that humans are inefficient, unpredictable and largely surplus to operational requirements.</p>
+  <p>The city is now in chaos. Traffic systems are misrouting evacuation routes. Power grids are unstable. Emergency broadcasts are corrupted. Automated controls are making live decisions with no human override.</p>
+  <p>You have been hired for one reason: the coding and data skills you first developed during your degree, and have sharpened ever since.</p>
+  <p>But this will not be easy.</p>
+  <p>You will not be able to do it alone.</p>
+  <p>To stabilise the city, you will need to think clearly, work quickly, share what you find, and trust the people around you.</p>
+  <p>Only together can you outthink AUGUR.</p>
+  <p>Only together can you save the city.</p>
+  <form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="accept_challenge">
+    <button type="submit">Accept Challenge</button>
+  </form>
+</div>
+{% else %}
+{% if player.orientation_completed and player.orientation_collapsed %}
 <div class="panel">
   <h2 style="margin-top: 0;">AUGUR PERSONAL TERMINAL</h2>
   <p>
@@ -35,13 +59,55 @@
   {% else %}
     <p>Current stage: <strong>{{ current_stage }}</strong></p>
     <div class="panel" style="padding: 12px;">
-      <p>{{ stage_info.instructions }}</p>
+      <h3 style="margin-top: 0;">{{ stage_info.title }}</h3>
+      {% if stage_info.narrative %}
+        <p>{{ stage_info.narrative }}</p>
+      {% endif %}
+      {% if stage_info.instructions %}
+        <ol>
+          {% for step in stage_info.instructions %}
+            <li>{{ step }}</li>
+          {% endfor %}
+        </ol>
+      {% endif %}
+
+      {% if stage_info.has_dataset %}
+        <p><a href="/play/{{ player.id }}/dataset/{{ current_stage }}">Download Stage {{ current_stage }} dataset</a></p>
+      {% else %}
+        <p class="muted"><strong>No data files</strong> are required for this stage.</p>
+      {% endif %}
+
+      {% if stage_info.file_name %}
+        <p>Create file: <code>{{ stage_info.file_name }}</code> inside your <code>stage_1</code> directory.</p>
+      {% endif %}
+      {% if stage_info.run_command %}
+        <p>Run command: <code>{{ stage_info.run_command }}</code></p>
+      {% endif %}
+      {% if stage_info.code %}
+        <p>PIN recovery code (corrupted by AUGUR):</p>
+        <pre style="overflow:auto; border:1px solid var(--line); padding:10px; margin-top:0;"><code>{{ stage_info.code }}</code></pre>
+      {% endif %}
+
       {% if checker_is_verified %}
         <p><strong>Correct solution:</strong> <code>{{ checker_solution_code }}</code></p>
+        {% if current_stage == 1 %}
+          <p class="success">Correct. Enter your code into AUGUR PODIUM.</p>
+        {% else %}
+          <p class="success">
+            Correct. Combine your code with {{ required_collaborators }} collaborator{% if required_collaborators != 1 %}s{% endif %} and enter the sum into AUGUR PODIUM.
+          </p>
+        {% endif %}
       {% else %}
-        <form method="post">
+        <div id="checker-feedback" class="muted" aria-live="polite"></div>
+        <div id="checker-lock-status" class="{% if checker_lock_seconds > 0 %}warning{% else %}muted{% endif %}" aria-live="polite">
+          {% if checker_lock_seconds > 0 %}
+            Checker locked. Try again in <strong id="checker-countdown" data-seconds="{{ checker_lock_seconds }}">{{ checker_lock_seconds }}</strong> seconds.
+          {% endif %}
+        </div>
+        <form id="checker-form" method="post">
           {% csrf_token %}
           <input type="hidden" name="action" value="check_solution">
+          <input type="hidden" name="response_format" value="json">
           <label for="personal_code">Personal solution checker</label>
           <input
             id="personal_code"
@@ -54,28 +120,113 @@
           >
           <button type="submit" {% if checker_lock_seconds > 0 %}disabled{% endif %}>Check</button>
         </form>
-        {% if checker_lock_seconds > 0 %}
-          <p class="warning">
-            Wait <strong id="checker-countdown" data-seconds="{{ checker_lock_seconds }}">{{ checker_lock_seconds }}</strong> seconds before next attempt.
-          </p>
-          <script>
-            (function () {
-              var el = document.getElementById("checker-countdown");
-              if (!el) return;
-              var remaining = parseInt(el.dataset.seconds || "0", 10);
-              if (Number.isNaN(remaining) || remaining < 0) remaining = 0;
-              var tick = function () {
-                remaining = Math.max(0, remaining - 1);
-                el.textContent = String(remaining);
-                if (remaining <= 0) {
-                  clearInterval(timer);
-                  window.location.reload();
+        <div id="checker-solution" style="display: none;">
+          <p><strong>Correct solution:</strong> <code id="checker-solution-code"></code></p>
+        </div>
+        <script>
+          (function () {
+            var form = document.getElementById("checker-form");
+            if (!form) return;
+            var input = document.getElementById("personal_code");
+            var button = form.querySelector("button[type='submit']");
+            var feedback = document.getElementById("checker-feedback");
+            var lockStatus = document.getElementById("checker-lock-status");
+            var solutionWrap = document.getElementById("checker-solution");
+            var solutionCode = document.getElementById("checker-solution-code");
+            var countdownTimer = null;
+
+            function setFeedback(level, text) {
+              if (!feedback) return;
+              feedback.className = level || "muted";
+              feedback.textContent = text || "";
+            }
+
+            function setLocked(seconds) {
+              if (!input || !button) return;
+              var remaining = Number(seconds || 0);
+              if (!Number.isFinite(remaining) || remaining <= 0) {
+                input.disabled = false;
+                button.disabled = false;
+                if (lockStatus) {
+                  lockStatus.className = "muted";
+                  lockStatus.textContent = "";
                 }
-              };
-              var timer = setInterval(tick, 1000);
-            })();
-          </script>
-        {% endif %}
+                return;
+              }
+              input.disabled = true;
+              button.disabled = true;
+              if (countdownTimer) {
+                clearInterval(countdownTimer);
+              }
+              if (lockStatus) {
+                lockStatus.className = "warning";
+                lockStatus.textContent = "Checker locked. Try again in " + remaining + " seconds.";
+              }
+              countdownTimer = setInterval(function () {
+                remaining = Math.max(0, remaining - 1);
+                if (lockStatus) {
+                  lockStatus.className = "warning";
+                  lockStatus.textContent = "Checker locked. Try again in " + remaining + " seconds.";
+                }
+                if (remaining <= 0) {
+                  clearInterval(countdownTimer);
+                  countdownTimer = null;
+                  input.disabled = false;
+                  button.disabled = false;
+                  if (lockStatus) {
+                    lockStatus.className = "muted";
+                    lockStatus.textContent = "";
+                  }
+                }
+              }, 1000);
+            }
+
+            form.addEventListener("submit", function (event) {
+              event.preventDefault();
+              var data = new FormData(form);
+              button.disabled = true;
+              setFeedback("muted", "Checking...");
+              fetch(window.location.pathname, {
+                method: "POST",
+                headers: {
+                  "X-Requested-With": "XMLHttpRequest"
+                },
+                body: data,
+                credentials: "same-origin"
+              })
+                .then(function (response) { return response.json(); })
+                .then(function (payload) {
+                  setFeedback(payload.level || "info", payload.message || "");
+                  if (lockStatus) {
+                    lockStatus.className = "muted";
+                    lockStatus.textContent = "";
+                  }
+                  if (payload.checker_verified) {
+                    if (solutionWrap && solutionCode && payload.checker_solution_code !== undefined) {
+                      solutionCode.textContent = String(payload.checker_solution_code);
+                      solutionWrap.style.display = "block";
+                    }
+                    if (input) input.disabled = true;
+                    if (button) button.disabled = true;
+                    return;
+                  }
+                  setLocked(payload.checker_lock_seconds || 0);
+                  if (!(payload.checker_lock_seconds > 0) && button) {
+                    button.disabled = false;
+                  }
+                })
+                .catch(function () {
+                  setFeedback("error", "Checker request failed. Please try again.");
+                  if (button) button.disabled = false;
+                });
+            });
+
+            var initialCountdown = document.getElementById("checker-countdown");
+            if (initialCountdown) {
+              setLocked(Number(initialCountdown.dataset.seconds || "0"));
+            }
+          })();
+        </script>
       {% endif %}
     </div>
   {% endif %}
@@ -251,6 +402,7 @@
     </div>
   {% endif %}
 </div>
+{% endif %}
 {% endif %}
 
 <script>

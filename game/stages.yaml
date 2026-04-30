@@ -1,0 +1,152 @@
+stages:
+  1:
+    title: "Stage 1: Signal Capture"
+    has_dataset: true
+    narrative: "AUGUR's first control node is leaking fragmented PIN signals. The stream is corrupted, but not beyond recovery. Repair the script, decode the signal rows, and recover the 6-digit unlock PIN tied to your identity."
+    instructions:
+      - "Create a new directory called stage_1 in your VS Code project."
+      - "Create a new script file in that directory using the filename below for your chosen language."
+      - "Download the Stage 1 dataset from this page and save it in stage_1 as stage1_dataset.csv."
+      - "Copy and paste the starter code exactly as shown, then debug syntax errors until it runs."
+      - "Run the corrected script on stage1_dataset.csv to extract your personal 6-digit stage code."
+      - "Enter that 6-digit code into AUGUR PODIUM."
+    language_variants:
+      r:
+        file_name: "stage1_signal.R"
+        run_command: "Rscript stage1_signal.R stage1_dataset.csv"
+        code: |
+          args <- commandArgs(trailingOnly = TRUE)
+          if (length(args) == 0 {
+            stop("Usage: Rscript stage1_signal.R <dataset_path>")
+          }
+
+          dataset_path <- args[[1]]
+          df <- read.csv(dataset_path, stringsAsFactors = FALSE
+
+          signals <- df[df$keep == 1, ]
+          signals <- signals[order(signals$pos), ]
+
+          decode_digit <- function(encoded, key, pos) {
+            (encoded - key - (pos * 3)) %% 10
+          }
+
+          digits <- mapply(decode_digit, signals$encoded, signals$key, signals$pos)
+          cat(paste0(digits, collapse = ""), "\n")
+      python:
+        file_name: "stage1_signal.py"
+        run_command: "python stage1_signal.py stage1_dataset.csv"
+        code: |
+          import csv
+          import sys
+
+          if len(sys.argv) < 2:
+              raise SystemExit("Usage: python stage1_signal.py <dataset_path>")
+
+          dataset_path = sys.argv[1]
+          with open(dataset_path, newline="") as handle
+              rows = list(csv.DictReader(handle))
+
+          signals = sorted(
+              (row for row in rows if int(row["keep"]) == 1),
+              key=lambda row: int(row["pos"]),
+          )
+
+          digits = []
+          for row in signals:
+              encoded = int(row["encoded"])
+              key = int(row["key"])
+              pos = int(row["pos"])
+              digit = (encoded - key - (pos * 3)) % 10
+              digits.append(str(digit))
+
+          print("".join(digits))
+      javascript:
+        file_name: "stage1_signal.js"
+        run_command: "node stage1_signal.js stage1_dataset.csv"
+        code: |
+          const fs = require("fs");
+
+          function parseCsv(path) {
+            const lines = fs.readFileSync(path, "utf8").trim().split("\n");
+            const headers = lines[0].split(",");
+            return lines.slice(1).map((line) => {
+              const values = line.split(",");
+              const row = {};
+              headers.forEach((header, index) => {
+                row[header] = values[index];
+              });
+              return row;
+            });
+          }
+
+          const datasetPath = process.argv[2];
+          if (!datasetPath) {
+            console.error("Usage: node stage1_signal.js <dataset_path>");
+            process.exit(1);
+          }
+
+          const rows = parseCsv(datasetPath);
+          const signals = rows
+            .filter((row) => Number(row.keep) === 1)
+            .sort((a, b) => Number(a.pos) - Number(b.pos));
+
+          const digits = signals.map((row) => {
+            const encoded = Number(row.encoded);
+            const key = Number(row.key);
+            const pos = Number(row.pos);
+            return String((encoded - key - (pos * 3)) % 10);
+          });
+
+          console.log(digits.join(""));
+      default:
+        file_name: "stage1_signal.py"
+        run_command: "python stage1_signal.py stage1_dataset.csv"
+        code: |
+          import csv
+          import sys
+
+          if len(sys.argv) < 2:
+              raise SystemExit("Usage: python stage1_signal.py <dataset_path>")
+
+          dataset_path = sys.argv[1]
+          with open(dataset_path, newline="") as handle
+              rows = list(csv.DictReader(handle))
+
+          signals = sorted(
+              (row for row in rows if int(row["keep"]) == 1),
+              key=lambda row: int(row["pos"]),
+          )
+
+          digits = []
+          for row in signals:
+              encoded = int(row["encoded"])
+              key = int(row["key"])
+              pos = int(row["pos"])
+              digit = (encoded - key - (pos * 3)) % 10
+              digits.append(str(digit))
+
+          print("".join(digits))
+
+  2:
+    title: "Stage 2: Pattern Decode"
+    has_dataset: true
+    instructions:
+      - "Stage 2 challenge content coming next."
+
+  3:
+    title: "Stage 3: Protocol Recovery"
+    has_dataset: true
+    instructions:
+      - "Stage 3 challenge content coming next."
+
+  4:
+    title: "Stage 4: Mesh Synchronisation"
+    has_dataset: true
+    instructions:
+      - "Stage 4 challenge content coming next."
+
+  5:
+    title: "Stage 5: Final Relay"
+    has_dataset: true
+    instructions:
+      - "Stage 5 challenge content coming next."

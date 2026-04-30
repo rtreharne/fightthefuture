@@ -23,6 +23,18 @@ class JoinFlowTests(TestCase):
         self.assertEqual(response2["Location"], f"/play/{player.id}")
         self.assertEqual(Player.objects.count(), 1)
 
+    def test_play_redirects_to_join_when_player_not_in_current_run(self):
+        old_run = Run.objects.create(name="run_old", status=Run.Status.ACTIVE, is_current=True)
+        player = create_player(old_run, "legacy")
+
+        old_run.is_current = False
+        old_run.save(update_fields=["is_current"])
+        Run.objects.create(name="run_new", status=Run.Status.ACTIVE, is_current=True)
+
+        response = self.client.get(f"/play/{player.id}")
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response["Location"], "/join")
+
 
 class PodiumProgressionTests(TestCase):
     def setUp(self):
@@ -35,7 +47,8 @@ class PodiumProgressionTests(TestCase):
         p1_s1 = StageCode.objects.get(player=p1, stage=1).code
         p2_s1 = StageCode.objects.get(player=p2, stage=1).code
 
-        self.client.post("/podium", {"action": "submit", "code": str(p1_s1)})
+        stage1_response = self.client.post("/podium", {"action": "submit", "code": str(p1_s1)}, follow=True)
+        self.assertContains(stage1_response, "p1 has successfully completed stage 1 and progressed.")
         self.client.post("/podium", {"action": "submit", "code": str(p2_s1)})
 
         p1.refresh_from_db()
@@ -44,7 +57,8 @@ class PodiumProgressionTests(TestCase):
         self.assertEqual(p2.current_stage, 2)
 
         stage2_sum = StageCode.objects.get(player=p1, stage=2).code + StageCode.objects.get(player=p2, stage=2).code
-        self.client.post("/podium", {"action": "submit", "code": str(stage2_sum)})
+        stage2_response = self.client.post("/podium", {"action": "submit", "code": str(stage2_sum)}, follow=True)
+        self.assertContains(stage2_response, "p1 and p2 have worked together to complete stage 2 and progressed.")
 
         p1.refresh_from_db()
         p2.refresh_from_db()
@@ -150,16 +164,32 @@ class OrientationWalkthroughTests(TestCase):
         self.run = Run.objects.create(name="run_orient", status=Run.Status.ACTIVE, is_current=True)
         self.player = create_player(self.run, "orient")
 
-    def test_first_visit_starts_orientation_open_at_step_one(self):
+    def test_first_visit_shows_introduction_gate(self):
         response = self.client.get(f"/play/{self.player.id}")
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "ORIENTATION")
-        self.assertContains(response, "Step 1.")
-        self.assertContains(response, "Tablet devices and mobile phones cannot be used")
+        self.assertContains(response, "Introduction")
+        self.assertContains(response, "The year is 2030.")
+        self.assertContains(response, "Accept Challenge")
+        self.assertNotContains(response, "ORIENTATION")
+        self.assertNotContains(response, "Step 1.")
         self.assertNotContains(response, "Current stage:")
         self.assertContains(response, "var pausePolling = true;")
 
+    def test_accept_challenge_opens_orientation(self):
+        response = self.client.post(
+            f"/play/{self.player.id}",
+            {"action": "accept_challenge"},
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.player.refresh_from_db()
+        self.assertTrue(self.player.intro_accepted)
+        self.assertContains(response, "ORIENTATION")
+        self.assertContains(response, "Step 1.")
+
     def test_own_device_requires_os_before_language(self):
+        self.player.intro_accepted = True
+        self.player.save(update_fields=["intro_accepted"])
         self.client.post(
             f"/play/{self.player.id}",
             {"action": "orientation_update", "orientation_event": "choose_device", "orientation_value": "own"},
@@ -190,6 +220,8 @@ class OrientationWalkthroughTests(TestCase):
         self.assertEqual(self.player.orientation_step, 4)
 
     def test_uol_flow_can_skip_os_and_complete_collapses(self):
+        self.player.intro_accepted = True
+        self.player.save(update_fields=["intro_accepted"])
         self.client.post(
             f"/play/{self.player.id}",
             {"action": "orientation_update", "orientation_event": "choose_device", "orientation_value": "uol"},
@@ -217,15 +249,46 @@ class OrientationWalkthroughTests(TestCase):
         self.assertContains(response, "Current stage:")
         self.assertContains(response, "var pausePolling = false;")
 
+    def test_review_orientation_reopens_expanded_orientation_panel(self):
+        self.player.intro_accepted = True
+        self.player.orientation_completed = True
+        self.player.orientation_collapsed = True
+        self.player.orientation_step = 5
+        self.player.orientation_device_type = Player.OrientationDeviceType.UOL
+        self.player.orientation_language = Player.OrientationLanguage.PYTHON
+        self.player.save(
+            update_fields=[
+                "intro_accepted",
+                "orientation_completed",
+                "orientation_collapsed",
+                "orientation_step",
+                "orientation_device_type",
+                "orientation_language",
+            ]
+        )
+
+        response = self.client.post(
+            f"/play/{self.player.id}",
+            {"action": "orientation_update", "orientation_event": "reopen"},
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.player.refresh_from_db()
+        self.assertFalse(self.player.orientation_collapsed)
+        self.assertContains(response, "ORIENTATION")
+        self.assertContains(response, "Step 1.")
+        self.assertNotContains(response, "Orientation complete.")
+
 
 class PersonalCheckerTests(TestCase):
     def setUp(self):
         self.run = Run.objects.create(name="run_checker", status=Run.Status.ACTIVE, is_current=True)
         self.player = create_player(self.run, "checker")
+        self.player.intro_accepted = True
         self.player.orientation_completed = True
         self.player.orientation_collapsed = True
         self.player.orientation_step = 5
-        self.player.save(update_fields=["orientation_completed", "orientation_collapsed", "orientation_step"])
+        self.player.save(update_fields=["intro_accepted", "orientation_completed", "orientation_collapsed", "orientation_step"])
         self.current_code = StageCode.objects.get(player=self.player, stage=1).code
 
     def _expire_lock(self):
@@ -308,7 +371,7 @@ class PersonalCheckerTests(TestCase):
             follow=True,
         )
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Correct. Enter your code into the podium.")
+        self.assertContains(response, "Correct. Enter your code into AUGUR PODIUM.")
         self.assertContains(response, "Correct solution:")
         self.assertContains(response, str(self.current_code))
         self.assertNotContains(response, 'name="personal_code"')
@@ -320,3 +383,126 @@ class PersonalCheckerTests(TestCase):
         self.assertContains(persisted, "Correct solution:")
         self.assertContains(persisted, str(self.current_code))
         self.assertNotContains(persisted, 'name="personal_code"')
+
+    def test_async_checker_success_stage1_returns_json_without_refresh(self):
+        response = self.client.post(
+            f"/play/{self.player.id}",
+            {
+                "action": "check_solution",
+                "personal_code": str(self.current_code),
+                "response_format": "json",
+            },
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["level"], "success")
+        self.assertEqual(payload["message"], "Correct. Enter your code into AUGUR PODIUM.")
+        self.assertTrue(payload["checker_verified"])
+        self.assertEqual(payload["checker_solution_code"], self.current_code)
+
+    def test_async_checker_success_stage2_includes_collaborator_count_message(self):
+        self.player.current_stage = 2
+        self.player.checker_stage = None
+        self.player.checker_verified_stage = None
+        self.player.save(update_fields=["current_stage", "checker_stage", "checker_verified_stage"])
+        stage2_code = StageCode.objects.get(player=self.player, stage=2).code
+
+        response = self.client.post(
+            f"/play/{self.player.id}",
+            {
+                "action": "check_solution",
+                "personal_code": str(stage2_code),
+                "response_format": "json",
+            },
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["level"], "success")
+        self.assertEqual(
+            payload["message"],
+            "Correct. Combine your code with 1 collaborator and enter the sum into AUGUR PODIUM.",
+        )
+        self.assertTrue(payload["checker_verified"])
+        self.assertEqual(payload["checker_solution_code"], stage2_code)
+
+        persisted = self.client.get(f"/play/{self.player.id}")
+        self.assertEqual(persisted.status_code, 200)
+        self.assertContains(
+            persisted,
+            "Correct. Combine your code with 1 collaborator and enter the sum into AUGUR PODIUM.",
+        )
+
+    def test_async_checker_wrong_answer_returns_direction_hint(self):
+        response = self.client.post(
+            f"/play/{self.player.id}",
+            {
+                "action": "check_solution",
+                "personal_code": str(self.current_code + 1),
+                "response_format": "json",
+            },
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["level"], "error")
+        self.assertIn("too high", payload["message"])
+
+
+class StageContentTests(TestCase):
+    def setUp(self):
+        self.run = Run.objects.create(name="run_stage_content", status=Run.Status.ACTIVE, is_current=True)
+        self.player = create_player(self.run, "builder")
+        self.player.intro_accepted = True
+        self.player.orientation_completed = True
+        self.player.orientation_collapsed = True
+        self.player.orientation_step = 5
+        self.player.save(update_fields=["intro_accepted", "orientation_completed", "orientation_collapsed", "orientation_step"])
+
+    def test_stage1_uses_language_specific_yaml_content(self):
+        self.player.orientation_language = Player.OrientationLanguage.PYTHON
+        self.player.save(update_fields=["orientation_language"])
+
+        python_response = self.client.get(f"/play/{self.player.id}")
+        self.assertEqual(python_response.status_code, 200)
+        self.assertContains(python_response, "Stage 1: Signal Capture")
+        self.assertContains(python_response, "Download the Stage 1 dataset")
+        self.assertContains(python_response, "Download Stage 1 dataset")
+        self.assertContains(python_response, "stage1_signal.py")
+        self.assertContains(python_response, "python stage1_signal.py stage1_dataset.csv")
+        self.assertContains(python_response, "signals = sorted")
+        self.assertNotContains(python_response, "TARGET_CODE")
+
+        self.player.orientation_language = Player.OrientationLanguage.R
+        self.player.save(update_fields=["orientation_language"])
+        r_response = self.client.get(f"/play/{self.player.id}")
+        self.assertContains(r_response, "stage1_signal.R")
+        self.assertContains(r_response, "Rscript stage1_signal.R stage1_dataset.csv")
+        self.assertContains(r_response, "decode_digit")
+        self.assertNotContains(r_response, "target_code")
+
+    def test_stage1_dataset_encodes_player_stage_code(self):
+        stage1_code = StageCode.objects.get(player=self.player, stage=1).code
+        response = self.client.get(f"/play/{self.player.id}/dataset/1")
+        self.assertEqual(response.status_code, 200)
+
+        lines = response.content.decode().strip().splitlines()
+        header = lines[0].split(",")
+        rows = []
+        for line in lines[1:]:
+            values = line.split(",")
+            rows.append(dict(zip(header, values)))
+
+        signals = [row for row in rows if int(row["keep"]) == 1]
+        self.assertEqual(len(signals), 6)
+        signals.sort(key=lambda row: int(row["pos"]))
+        decoded_digits = [
+            str((int(row["encoded"]) - int(row["key"]) - (int(row["pos"]) * 3)) % 10)
+            for row in signals
+        ]
+        decoded_code = "".join(decoded_digits)
+        self.assertEqual(decoded_code, f"{stage1_code:06d}")

@@ -2,16 +2,18 @@ from __future__ import annotations
 
 from datetime import timedelta
 from io import StringIO
+import random
 
 from django.conf import settings
 from django.contrib import messages
-from django.http import Http404, HttpResponse
+from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 
-from .constants import FINAL_STAGE, STAGE_COUNT, STAGE_DETAILS, STAGE_GROUP_SIZES
+from .constants import FINAL_STAGE, STAGE_COUNT, STAGE_GROUP_SIZES
 from .models import Player, PodiumSubmission, Run, StageCode
+from .stage_content import get_stage_content, stage_has_dataset
 from .services import (
     archive_current_run,
     create_player,
@@ -148,15 +150,50 @@ def join_view(request):
 
 def play_view(request, user_id: int):
     player = get_object_or_404(Player.objects.select_related("run"), id=user_id)
+    current_run = Run.current()
+    if not current_run or player.run_id != current_run.id:
+        return redirect("join")
+
     now = timezone.now()
     _sync_orientation_step(player)
 
     if player.current_stage > FINAL_STAGE:
         current_stage = FINAL_STAGE
         stage_info = None
+        expected = None
+        required_collaborators = 0
     else:
         current_stage = player.current_stage
-        stage_info = STAGE_DETAILS[current_stage]
+        expected = StageCode.objects.filter(player=player, stage=current_stage).values_list("code", flat=True).first()
+        stage_info = get_stage_content(current_stage, player.orientation_language)
+        required_collaborators = max(0, required_group_size(current_run, current_stage) - 1)
+
+    if request.method == "POST" and request.POST.get("action") == "accept_challenge":
+        if not player.intro_accepted:
+            player.intro_accepted = True
+            player.save(update_fields=["intro_accepted"])
+        return redirect("play", user_id=player.id)
+
+    if not player.intro_accepted:
+        return render(
+            request,
+            "game/play.html",
+            {
+                "player": player,
+                "stage_info": stage_info,
+                "current_stage": current_stage,
+                "checker_is_verified": False,
+                "checker_solution_code": None,
+                "checker_lock_seconds": 0,
+                "orientation_is_open": False,
+                "orientation_pause_polling": True,
+                "orientation_can_choose_language": False,
+                "final_stage": FINAL_STAGE,
+                "stage_count": STAGE_COUNT,
+                "stage_group_sizes": STAGE_GROUP_SIZES,
+                "required_collaborators": required_collaborators,
+            },
+        )
 
     # Stage progression resets checker lockout state.
     if player.checker_stage and player.checker_stage != current_stage:
@@ -165,10 +202,41 @@ def play_view(request, user_id: int):
         player.checker_stage = current_stage
         player.save(update_fields=["checker_fail_count", "checker_locked_until", "checker_stage"])
 
-    expected = None
-    if not player.is_complete:
-        expected = StageCode.objects.filter(player=player, stage=current_stage).values_list("code", flat=True).first()
+    if player.is_complete:
+        expected = None
     checker_is_verified = (player.checker_verified_stage == current_stage)
+    is_async_checker = (
+        request.method == "POST"
+        and request.POST.get("action") == "check_solution"
+        and (
+            request.headers.get("X-Requested-With") == "XMLHttpRequest"
+            or request.POST.get("response_format") == "json"
+        )
+    )
+
+    def checker_success_message() -> str:
+        if current_stage == 1:
+            return "Correct. Enter your code into AUGUR PODIUM."
+        group_size = required_group_size(current_run, current_stage)
+        collaborators = max(0, group_size - 1)
+        suffix = "" if collaborators == 1 else "s"
+        return (
+            f"Correct. Combine your code with {collaborators} collaborator{suffix} "
+            "and enter the sum into AUGUR PODIUM."
+        )
+
+    def checker_response(level: str, message_text: str, **payload):
+        if is_async_checker:
+            body = {"ok": level == "success", "level": level, "message": message_text}
+            body.update(payload)
+            return JsonResponse(body)
+        if level == "success":
+            messages.success(request, message_text)
+        elif level == "info":
+            messages.info(request, message_text)
+        else:
+            messages.error(request, message_text)
+        return redirect("play", user_id=player.id)
 
     if request.method == "POST" and request.POST.get("action") == "orientation_update":
         event = request.POST.get("orientation_event", "").strip()
@@ -189,8 +257,7 @@ def play_view(request, user_id: int):
 
     if request.method == "POST" and request.POST.get("action") == "check_solution":
         if player.is_complete:
-            messages.info(request, "You already completed all stages.")
-            return redirect("play", user_id=player.id)
+            return checker_response("info", "You already completed all stages.", checker_verified=False)
 
         if player.checker_stage != current_stage:
             player.checker_stage = current_stage
@@ -199,22 +266,28 @@ def play_view(request, user_id: int):
             player.save(update_fields=["checker_stage", "checker_fail_count", "checker_locked_until"])
 
         if checker_is_verified:
-            messages.info(request, "Solution already verified for this stage.")
-            return redirect("play", user_id=player.id)
+            return checker_response(
+                "info",
+                checker_success_message(),
+                checker_verified=True,
+                checker_solution_code=expected,
+            )
 
         if player.checker_locked_until and player.checker_locked_until > now:
             remaining = max(1, int((player.checker_locked_until - now).total_seconds()))
-            messages.error(request, f"Checker locked. Try again in {remaining} seconds.")
-            return redirect("play", user_id=player.id)
+            return checker_response(
+                "error",
+                f"Checker locked. Try again in {remaining} seconds.",
+                checker_verified=False,
+                checker_lock_seconds=remaining,
+            )
 
         submitted_raw = request.POST.get("personal_code", "").strip()
         if not submitted_raw.isdigit():
-            messages.error(request, "Enter a numeric code.")
-            return redirect("play", user_id=player.id)
+            return checker_response("error", "Enter a numeric code.", checker_verified=False)
 
         if expected is None:
-            messages.error(request, "No code found for your current stage.")
-            return redirect("play", user_id=player.id)
+            return checker_response("error", "No code found for your current stage.", checker_verified=False)
 
         submitted = int(submitted_raw)
         if submitted == expected:
@@ -223,8 +296,13 @@ def play_view(request, user_id: int):
             player.checker_stage = current_stage
             player.checker_verified_stage = current_stage
             player.save(update_fields=["checker_fail_count", "checker_locked_until", "checker_stage", "checker_verified_stage"])
-            messages.success(request, "Correct. Enter your code into the podium.")
-            return redirect("play", user_id=player.id)
+            return checker_response(
+                "success",
+                checker_success_message(),
+                checker_verified=True,
+                checker_solution_code=expected,
+                checker_lock_seconds=0,
+            )
 
         player.checker_fail_count += 1
         if player.checker_fail_count == 1:
@@ -238,8 +316,12 @@ def play_view(request, user_id: int):
         player.save(update_fields=["checker_fail_count", "checker_locked_until", "checker_stage"])
 
         direction = "too low" if submitted < expected else "too high"
-        messages.error(request, f"Incorrect: {direction}. Wait {lock_seconds} seconds.")
-        return redirect("play", user_id=player.id)
+        return checker_response(
+            "error",
+            f"Incorrect: {direction}. Wait {lock_seconds} seconds.",
+            checker_verified=False,
+            checker_lock_seconds=lock_seconds,
+        )
 
     checker_lock_seconds = 0
     if (not checker_is_verified) and player.checker_locked_until and player.checker_locked_until > now:
@@ -266,6 +348,7 @@ def play_view(request, user_id: int):
             "final_stage": FINAL_STAGE,
             "stage_count": STAGE_COUNT,
             "stage_group_sizes": STAGE_GROUP_SIZES,
+            "required_collaborators": required_collaborators,
         },
     )
 
@@ -274,6 +357,43 @@ def dataset_download_view(request, user_id: int, stage: int):
     player = get_object_or_404(Player, id=user_id)
     if stage < 1 or stage > STAGE_COUNT:
         raise Http404("Invalid stage")
+    if not stage_has_dataset(stage):
+        raise Http404("No dataset is configured for this stage")
+    if stage == 1:
+        stage_code = (
+            StageCode.objects.filter(player=player, stage=1).values_list("code", flat=True).first()
+        )
+        if stage_code is None:
+            raise Http404("Stage 1 code not found")
+
+        digits = [int(ch) for ch in f"{int(stage_code):06d}"]
+        rng = random.Random(f"stage1:{player.id}:{stage_code}:{player.username_key}")
+        rows: list[dict[str, int]] = []
+
+        for pos, digit in enumerate(digits, start=1):
+            key = rng.randint(11, 97)
+            encoded = (digit + key + (pos * 3)) % 10
+            rows.append({"keep": 1, "pos": pos, "key": key, "encoded": encoded})
+
+        for _ in range(8):
+            rows.append(
+                {
+                    "keep": 0,
+                    "pos": rng.randint(1, 9),
+                    "key": rng.randint(11, 97),
+                    "encoded": rng.randint(0, 9),
+                }
+            )
+
+        rng.shuffle(rows)
+        handle = StringIO()
+        handle.write("record_id,keep,pos,key,encoded\n")
+        for idx, row in enumerate(rows, start=1):
+            handle.write(f"{idx},{row['keep']},{row['pos']},{row['key']},{row['encoded']}\n")
+
+        response = HttpResponse(handle.getvalue(), content_type="text/csv")
+        response["Content-Disposition"] = f'attachment; filename="stage_{stage}_dataset_{player.username}.csv"'
+        return response
 
     rng_base = (player.id * 97) + (stage * 13)
     handle = StringIO()

@@ -79,6 +79,7 @@ class Player(models.Model):
         blank=True,
         validators=[MinValueValidator(1), MaxValueValidator(STAGE_COUNT)],
     )
+    intro_accepted = models.BooleanField(default=False)
     orientation_completed = models.BooleanField(default=False)
     orientation_collapsed = models.BooleanField(default=False)
     orientation_step = models.PositiveSmallIntegerField(default=1, validators=[MinValueValidator(1), MaxValueValidator(5)])
