@@ -12,7 +12,8 @@
   <form method="post">
     {% csrf_token %}
     <label for="username">User name</label>
-    <input id="username" name="username" type="text" maxlength="80" required placeholder="treharne">
+    <p class="muted" style="margin-top: 0;">No spaces. Use a unique handle with at least one number (example: <code>dave23</code>).</p>
+    <input id="username" name="username" type="text" maxlength="80" required placeholder="dave23" pattern="[A-Za-z0-9._-]+">
     <button type="submit">Enter Game</button>
   </form>
 </div>

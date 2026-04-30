@@ -21,9 +21,10 @@ class PlayerAdmin(admin.ModelAdmin):
         "orientation_device_type",
         "orientation_language",
         "is_test_user",
+        "is_suspended",
         "joined_at",
     )
-    list_filter = ("run", "current_stage", "is_test_user")
+    list_filter = ("run", "current_stage", "is_test_user", "is_suspended")
     search_fields = ("username", "username_key")
 
 

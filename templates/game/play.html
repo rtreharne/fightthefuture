@@ -88,7 +88,9 @@
         <pre style="overflow:auto; border:1px solid var(--line); padding:10px; margin-top:0;"><code>{{ stage_info.code }}</code></pre>
       {% endif %}
 
-      {% if checker_is_verified %}
+      {% if player.is_suspended %}
+        <p class="warning">Your account is currently suspended. Ask the facilitator to reactivate you.</p>
+      {% elif checker_is_verified %}
         <p><strong>Correct solution:</strong> <code>{{ checker_solution_code }}</code></p>
         {% if current_stage == 1 %}
           <p class="success">Correct. Enter your code into AUGUR PODIUM.</p>

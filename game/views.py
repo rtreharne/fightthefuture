@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import timedelta
 from io import StringIO
 import random
+import re
 
 from django.conf import settings
 from django.contrib import messages
@@ -28,6 +29,7 @@ from .services import (
 )
 
 ORIENTATION_MAX_STEP = 5
+JOIN_USERNAME_RE = re.compile(r"^[A-Za-z0-9._-]+$")
 
 
 def _sync_orientation_step(player: Player) -> None:
@@ -132,12 +134,19 @@ def join_view(request):
             existing_player = Player.objects.filter(run=run, username_key=username_clean.lower()).first()
             if existing_player:
                 return redirect("play", user_id=existing_player.id)
-            try:
-                player = create_player(run, username_clean)
-            except Exception as exc:  # noqa: BLE001
-                messages.error(request, f"Could not join: {exc}")
+            if any(char.isspace() for char in username_clean):
+                messages.error(request, "User name cannot contain spaces.")
+            elif not JOIN_USERNAME_RE.fullmatch(username_clean):
+                messages.error(request, "Use only letters, numbers, dot, underscore, or hyphen.")
+            elif not any(char.isdigit() for char in username_clean):
+                messages.error(request, 'Use a more unique user name. Example: "dave23".')
             else:
-                return redirect("play", user_id=player.id)
+                try:
+                    player = create_player(run, username_clean)
+                except Exception as exc:  # noqa: BLE001
+                    messages.error(request, f"Could not join: {exc}")
+                else:
+                    return redirect("play", user_id=player.id)
 
     return render(
         request,
@@ -215,10 +224,10 @@ def play_view(request, user_id: int):
     )
 
     def checker_success_message() -> str:
-        if current_stage == 1:
-            return "Correct. Enter your code into AUGUR PODIUM."
         group_size = required_group_size(current_run, current_stage)
         collaborators = max(0, group_size - 1)
+        if collaborators == 0:
+            return "Correct. Enter your code into AUGUR PODIUM."
         suffix = "" if collaborators == 1 else "s"
         return (
             f"Correct. Combine your code with {collaborators} collaborator{suffix} "
@@ -256,6 +265,13 @@ def play_view(request, user_id: int):
         return redirect("play", user_id=player.id)
 
     if request.method == "POST" and request.POST.get("action") == "check_solution":
+        if player.is_suspended:
+            return checker_response(
+                "error",
+                "Your account is suspended. Ask the facilitator to reactivate you.",
+                checker_verified=False,
+            )
+
         if player.is_complete:
             return checker_response("info", "You already completed all stages.", checker_verified=False)
 
@@ -610,6 +626,40 @@ def teacher_view(request):
                     run.collaboration_size_cap = None
                     run.save(update_fields=["collaboration_size_cap"])
                     messages.success(request, "Collaboration size override cleared.")
+            elif action == "suspend_user":
+                if not run:
+                    messages.error(request, "No current run.")
+                else:
+                    username = request.POST.get("username", "").strip()
+                    if not username:
+                        messages.error(request, "Enter a username.")
+                    else:
+                        player = Player.objects.filter(run=run, username_key=username.lower()).first()
+                        if not player:
+                            messages.error(request, f'User "{username}" was not found in the current run.')
+                        elif player.is_suspended:
+                            messages.info(request, f'{player.username} is already suspended.')
+                        else:
+                            player.is_suspended = True
+                            player.save(update_fields=["is_suspended"])
+                            messages.success(request, f"{player.username} has been suspended.")
+            elif action == "reactivate_user":
+                if not run:
+                    messages.error(request, "No current run.")
+                else:
+                    username = request.POST.get("username", "").strip()
+                    if not username:
+                        messages.error(request, "Enter a username.")
+                    else:
+                        player = Player.objects.filter(run=run, username_key=username.lower()).first()
+                        if not player:
+                            messages.error(request, f'User "{username}" was not found in the current run.')
+                        elif not player.is_suspended:
+                            messages.info(request, f"{player.username} is already active.")
+                        else:
+                            player.is_suspended = False
+                            player.save(update_fields=["is_suspended"])
+                            messages.success(request, f"{player.username} has been reactivated.")
             elif action == "logout_teacher":
                 request.session["teacher_authenticated"] = False
                 return redirect("teacher")

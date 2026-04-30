@@ -45,10 +45,13 @@ def normalize_username(username: str) -> str:
     return username.strip()
 
 
-def required_group_size(run: Run, stage: int) -> int:
-    if run.collaboration_size_cap:
-        return int(run.collaboration_size_cap)
-    return STAGE_GROUP_SIZES[stage]
+def required_group_size(run: Run, stage: int, available_count: int | None = None) -> int:
+    base_size = int(run.collaboration_size_cap) if run.collaboration_size_cap else STAGE_GROUP_SIZES[stage]
+    if available_count is None:
+        available_count = Player.objects.filter(run=run, current_stage=stage, is_suspended=False).count()
+    if available_count <= 0:
+        return base_size
+    return min(base_size, available_count)
 
 
 def create_new_current_run() -> Run:
@@ -162,7 +165,7 @@ def create_test_users(run: Run, n_users: int) -> list[Player]:
 def _stage_entries(run: Run, stage: int) -> list[tuple[Player, int]]:
     codes = (
         StageCode.objects.select_related("player")
-        .filter(run=run, stage=stage, player__current_stage=stage)
+        .filter(run=run, stage=stage, player__current_stage=stage, player__is_suspended=False)
         .order_by("player_id")
     )
     return [(stage_code.player, stage_code.code) for stage_code in codes]
@@ -271,9 +274,8 @@ def find_matching_groups(run: Run, submitted_sum: int, limit: int = MAX_MATCHES)
     for stage in range(1, STAGE_COUNT + 1):
         if len(matches) >= limit:
             break
-        group_size = required_group_size(run, stage)
-
         entries = _stage_entries(run, stage)
+        group_size = required_group_size(run, stage, available_count=len(entries))
         if len(entries) < group_size:
             continue
 
@@ -299,7 +301,8 @@ def find_matching_groups(run: Run, submitted_sum: int, limit: int = MAX_MATCHES)
 
 
 def _validate_stage_group(run: Run, stage: int, player_ids: list[int], submitted_sum: int) -> list[Player]:
-    expected_size = required_group_size(run, stage)
+    available_count = Player.objects.filter(run=run, current_stage=stage, is_suspended=False).count()
+    expected_size = required_group_size(run, stage, available_count=available_count)
     selected_ids = sorted(set(player_ids))
     if len(selected_ids) != expected_size:
         raise ValueError(f"Stage {stage} requires exactly {expected_size} players")
@@ -311,6 +314,8 @@ def _validate_stage_group(run: Run, stage: int, player_ids: list[int], submitted
     )
     if len(players) != expected_size:
         raise ValueError("Selected players are invalid for this run")
+    if any(player.is_suspended for player in players):
+        raise ValueError("Suspended players cannot be used in collaborations")
     if any(player.current_stage != stage for player in players):
         raise ValueError("All selected players must currently be at the chosen stage")
 
@@ -434,7 +439,7 @@ def resolve_pending_submission(submission: PodiumSubmission, stage: int, player_
 
         submission.status = PodiumSubmission.Status.ACCEPTED
         submission.stage = stage
-        submission.required_size = required_group_size(run, stage)
+        submission.required_size = len(players)
         submission.resolved_manually = True
         submission.progressed_usernames = progressed_usernames
         submission.message = _progress_message(stage, progressed_usernames)

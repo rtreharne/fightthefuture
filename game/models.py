@@ -65,6 +65,7 @@ class Player(models.Model):
         validators=[MinValueValidator(1), MaxValueValidator(FINAL_STAGE + 1)],
     )
     is_test_user = models.BooleanField(default=False)
+    is_suspended = models.BooleanField(default=False)
     joined_at = models.DateTimeField(auto_now_add=True)
     completed_at = models.DateTimeField(null=True, blank=True)
     checker_fail_count = models.PositiveSmallIntegerField(default=0)

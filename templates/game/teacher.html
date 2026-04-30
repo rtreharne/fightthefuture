@@ -28,8 +28,19 @@
   .entry-item.hidden-entry {
     display: none;
   }
+  .entry-item.suspended-entry .code-pick {
+    opacity: 0.45;
+  }
   #username-filter {
     max-width: 280px;
+  }
+  .suspend-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .suspend-actions button {
+    width: auto;
   }
   .table-scroll.fit-mobile table {
     min-width: 0;
@@ -194,6 +205,19 @@
 </div>
 
 <div class="panel">
+  <h3 style="margin-top: 0;">Suspend or Reactivate User</h3>
+  <form method="post">
+    {% csrf_token %}
+    <label for="suspend-username">Username</label>
+    <input id="suspend-username" name="username" type="text" required>
+    <div class="suspend-actions">
+      <button type="submit" name="action" value="suspend_user">Suspend User</button>
+      <button type="submit" name="action" value="reactivate_user" class="alt">Reactivate User</button>
+    </div>
+  </form>
+</div>
+
+<div class="panel">
   <h3 style="margin-top: 0;">Players and Pre-determined Codes</h3>
   <label for="username-filter">Filter by username</label>
   <input id="username-filter" type="text" placeholder="username1;username2">
@@ -214,14 +238,14 @@
               {% for player in players %}
                 {% with code_value=stage_codes|get_item:player.id|get_item:stage %}
                   {% if code_value %}
-                    <div class="entry-item" data-username="{{ player.username|lower }}">
+                    <div class="entry-item{% if player.is_suspended %} suspended-entry{% endif %}" data-username="{{ player.username|lower }}">
                       <button
                         type="button"
                         class="code-pick{% if player.current_stage > stage %} used-code{% endif %}"
                         data-stage="{{ stage }}"
                         data-code="{{ code_value }}"
                         data-key="{{ player.id }}-{{ stage }}"
-                      >{{ player.username }} - {{ code_value }}</button>
+                      >{{ player.username }}{% if player.is_suspended %} [SUSPENDED]{% endif %} - {{ code_value }}</button>
                     </div>
                   {% endif %}
                 {% endwith %}

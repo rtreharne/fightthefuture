@@ -103,6 +103,29 @@ class MatchingEngineTests(TestCase):
         self.assertEqual(stage1[0].required_size, 2)
         self.assertEqual(set(stage1[0].player_ids), {a.id, b.id})
 
+    def test_default_group_size_falls_back_when_stage_population_is_small(self):
+        solo = self._create_player_with_stage_code("solo_s2", 2, 234567)
+
+        matches = find_matching_groups(self.run, 234567)
+        stage2 = [m for m in matches if m.stage == 2]
+
+        self.assertEqual(len(stage2), 1)
+        self.assertEqual(stage2[0].required_size, 1)
+        self.assertEqual(list(stage2[0].player_ids), [solo.id])
+
+    def test_suspended_players_are_excluded_from_matching(self):
+        a = self._create_player_with_stage_code("s2_a", 2, 140000)
+        b = self._create_player_with_stage_code("s2_b", 2, 180000)
+        b.is_suspended = True
+        b.save(update_fields=["is_suspended"])
+
+        matches = find_matching_groups(self.run, 320000)
+        stage2 = [m for m in matches if m.stage == 2]
+
+        self.assertEqual(stage2, [])
+        a.refresh_from_db()
+        self.assertFalse(a.is_suspended)
+
 
 class AmbiguityResolutionTests(TestCase):
     def setUp(self):

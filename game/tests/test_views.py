@@ -13,15 +13,28 @@ class JoinFlowTests(TestCase):
     def test_join_existing_username_redirects_to_existing_play_endpoint(self):
         Run.objects.create(name="run_join", status=Run.Status.ACTIVE, is_current=True)
 
-        response = self.client.post("/join", {"username": "Treharne"})
+        response = self.client.post("/join", {"username": "Treharne7"})
         self.assertEqual(response.status_code, 302)
         self.assertTrue(response["Location"].startswith("/play/"))
         player = Player.objects.get()
 
-        response2 = self.client.post("/join", {"username": "treharne"})
+        response2 = self.client.post("/join", {"username": "treharne7"})
         self.assertEqual(response2.status_code, 302)
         self.assertEqual(response2["Location"], f"/play/{player.id}")
         self.assertEqual(Player.objects.count(), 1)
+
+    def test_join_rejects_spaces_and_non_unique_style_names(self):
+        Run.objects.create(name="run_join_rules", status=Run.Status.ACTIVE, is_current=True)
+
+        response_spaces = self.client.post("/join", {"username": "dave 23"}, follow=True)
+        self.assertEqual(response_spaces.status_code, 200)
+        self.assertContains(response_spaces, "User name cannot contain spaces.")
+        self.assertEqual(Player.objects.count(), 0)
+
+        response_simple = self.client.post("/join", {"username": "Dave"}, follow=True)
+        self.assertEqual(response_simple.status_code, 200)
+        self.assertContains(response_simple, "Use a more unique user name.")
+        self.assertEqual(Player.objects.count(), 0)
 
     def test_play_redirects_to_join_when_player_not_in_current_run(self):
         old_run = Run.objects.create(name="run_old", status=Run.Status.ACTIVE, is_current=True)
@@ -157,6 +170,31 @@ class TeacherDashboardTests(TestCase):
         )
         run.refresh_from_db()
         self.assertIsNone(run.collaboration_size_cap)
+
+    def test_teacher_can_suspend_and_reactivate_user_by_username(self):
+        run = Run.objects.create(name="run_suspend", status=Run.Status.ACTIVE, is_current=True)
+        player = create_player(run, "DeltaUser")
+        self._teacher_login()
+
+        suspend = self.client.post(
+            "/teacher",
+            {"action": "suspend_user", "username": "deltauser"},
+            follow=True,
+        )
+        self.assertEqual(suspend.status_code, 200)
+        self.assertContains(suspend, "has been suspended")
+        player.refresh_from_db()
+        self.assertTrue(player.is_suspended)
+
+        reactivate = self.client.post(
+            "/teacher",
+            {"action": "reactivate_user", "username": "DELTAUSER"},
+            follow=True,
+        )
+        self.assertEqual(reactivate.status_code, 200)
+        self.assertContains(reactivate, "has been reactivated")
+        player.refresh_from_db()
+        self.assertFalse(player.is_suspended)
 
 
 class OrientationWalkthroughTests(TestCase):
@@ -407,6 +445,9 @@ class PersonalCheckerTests(TestCase):
         self.player.checker_stage = None
         self.player.checker_verified_stage = None
         self.player.save(update_fields=["current_stage", "checker_stage", "checker_verified_stage"])
+        partner = create_player(self.run, "checker_partner")
+        partner.current_stage = 2
+        partner.save(update_fields=["current_stage"])
         stage2_code = StageCode.objects.get(player=self.player, stage=2).code
 
         response = self.client.post(
@@ -436,6 +477,27 @@ class PersonalCheckerTests(TestCase):
             "Correct. Combine your code with 1 collaborator and enter the sum into AUGUR PODIUM.",
         )
 
+    def test_async_checker_success_stage2_dynamic_solo_when_no_partners(self):
+        self.player.current_stage = 2
+        self.player.checker_stage = None
+        self.player.checker_verified_stage = None
+        self.player.save(update_fields=["current_stage", "checker_stage", "checker_verified_stage"])
+        stage2_code = StageCode.objects.get(player=self.player, stage=2).code
+
+        response = self.client.post(
+            f"/play/{self.player.id}",
+            {
+                "action": "check_solution",
+                "personal_code": str(stage2_code),
+                "response_format": "json",
+            },
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["message"], "Correct. Enter your code into AUGUR PODIUM.")
+
     def test_async_checker_wrong_answer_returns_direction_hint(self):
         response = self.client.post(
             f"/play/{self.player.id}",
@@ -451,6 +513,24 @@ class PersonalCheckerTests(TestCase):
         self.assertFalse(payload["ok"])
         self.assertEqual(payload["level"], "error")
         self.assertIn("too high", payload["message"])
+
+    def test_checker_rejects_suspended_player(self):
+        self.player.is_suspended = True
+        self.player.save(update_fields=["is_suspended"])
+
+        response = self.client.post(
+            f"/play/{self.player.id}",
+            {
+                "action": "check_solution",
+                "personal_code": str(self.current_code),
+                "response_format": "json",
+            },
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertFalse(payload["ok"])
+        self.assertIn("suspended", payload["message"].lower())
 
 
 class StageContentTests(TestCase):
