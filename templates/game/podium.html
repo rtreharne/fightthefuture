@@ -1,6 +1,20 @@
 {% extends "game/base.html" %}
 
 {% block content %}
+<style>
+  .celebration-banner {
+    border: 1px solid var(--ok);
+    color: var(--ok);
+    text-transform: uppercase;
+    font-weight: 700;
+  }
+  #podium-confetti {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 1200;
+  }
+</style>
 <div class="panel">
   <h2 style="margin-top: 0;">AUGUR PODIUM</h2>
   {% if run %}
@@ -13,7 +27,7 @@
     {% csrf_token %}
     <input type="hidden" name="action" value="submit">
     <label for="code">Code sum</label>
-    <input id="code" type="text" name="code" required placeholder="6+ digit sum">
+    <input id="code" type="text" name="code" required placeholder="6+ digit sum" autofocus>
     <button type="submit">Submit Code</button>
   </form>
 </div>
@@ -69,4 +83,73 @@
     {% endfor %}
   </div>
 </div>
+
+{% if show_finale_celebration %}
+<div class="panel celebration-banner">
+  Congratulations! You have captured and disabled AUGUR. The city is safe!
+</div>
+<canvas id="podium-confetti"></canvas>
+<script>
+  (function () {
+    var canvas = document.getElementById("podium-confetti");
+    if (!canvas) return;
+    var ctx = canvas.getContext("2d");
+    var particles = [];
+    var colors = ["#2cff2c", "#63ff63", "#9dff9d", "#d8ff72"];
+    var start = Date.now();
+    var durationMs = 30000;
+
+    function sizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+
+    function spawnParticle() {
+      return {
+        x: Math.random() * canvas.width,
+        y: -20,
+        vx: (Math.random() - 0.5) * 1.4,
+        vy: 1.1 + Math.random() * 2.6,
+        size: 2 + Math.random() * 4,
+        color: colors[Math.floor(Math.random() * colors.length)],
+      };
+    }
+
+    function tick() {
+      var elapsed = Date.now() - start;
+      if (elapsed > durationMs) {
+        canvas.remove();
+        return;
+      }
+      while (particles.length < 180) {
+        particles.push(spawnParticle());
+      }
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      for (var i = 0; i < particles.length; i += 1) {
+        var p = particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vy += 0.012;
+        ctx.fillStyle = p.color;
+        ctx.fillRect(p.x, p.y, p.size, p.size);
+      }
+      particles = particles.filter(function (p) { return p.y < canvas.height + 30; });
+      requestAnimationFrame(tick);
+    }
+
+    sizeCanvas();
+    window.addEventListener("resize", sizeCanvas);
+    requestAnimationFrame(tick);
+  })();
+</script>
+{% endif %}
+
+<script>
+  (function () {
+    var codeInput = document.getElementById("code");
+    if (!codeInput) return;
+    codeInput.focus();
+    codeInput.select();
+  })();
+</script>
 {% endblock %}

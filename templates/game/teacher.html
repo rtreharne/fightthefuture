@@ -133,7 +133,7 @@
   <h2 style="margin-top: 0;">Facilitator Dashboard</h2>
   {% if run %}
     <p>Current run: <strong>{{ run.name }}</strong> | Status: <strong>{{ run.get_status_display }}</strong></p>
-    <p>Collaboration override: <strong>{% if collaboration_size_cap %}{{ collaboration_size_cap }}{% else %}default 1/2/4/8/8{% endif %}</strong></p>
+    <p>Collaboration override: <strong>{% if collaboration_size_cap %}{{ collaboration_size_cap }}{% else %}default 1/2/4/8{% endif %}</strong></p>
   {% else %}
     <p class="warning">No current run is active.</p>
   {% endif %}
@@ -272,11 +272,9 @@
         <tr><th>Stage</th><th>Sum</th></tr>
       </thead>
       <tbody>
-        <tr><td>S1</td><td><code id="sum-stage-1">0</code></td></tr>
-        <tr><td>S2</td><td><code id="sum-stage-2">0</code></td></tr>
-        <tr><td>S3</td><td><code id="sum-stage-3">0</code></td></tr>
-        <tr><td>S4</td><td><code id="sum-stage-4">0</code></td></tr>
-        <tr><td>S5</td><td><code id="sum-stage-5">0</code></td></tr>
+        {% for stage in stage_numbers %}
+          <tr><td>S{{ stage }}</td><td><code id="sum-stage-{{ stage }}">0</code></td></tr>
+        {% endfor %}
       </tbody>
     </table>
   </div>
@@ -291,33 +289,100 @@
     var toggleBtn = document.getElementById("sum-toggle-btn");
     if (!buttons.length) return;
 
+    var runId = "{% if run %}{{ run.id }}{% else %}none{% endif %}";
+    var storageBase = "augur-teacher-running-sums:" + runId;
+    var selectedStorageKey = storageBase + ":selected";
+    var minimizedStorageKey = storageBase + ":minimized";
+    var canStore = true;
+    try {
+      localStorage.getItem(selectedStorageKey);
+    } catch (err) {
+      canStore = false;
+    }
+
     var selected = new Set();
-    var sums = {1: 0, 2: 0, 3: 0, 4: 0, 5: 0};
+    var stages = [{% for stage in stage_numbers %}{{ stage }}{% if not forloop.last %}, {% endif %}{% endfor %}];
+    var sums = {};
+    stages.forEach(function (stage) {
+      sums[stage] = 0;
+    });
+    var buttonByKey = {};
+
+    buttons.forEach(function (btn) {
+      if (btn.dataset.key) {
+        buttonByKey[btn.dataset.key] = btn;
+      }
+    });
 
     var render = function () {
-      for (var stage = 1; stage <= 5; stage += 1) {
+      for (var i = 0; i < stages.length; i += 1) {
+        var stage = stages[i];
         var el = document.getElementById("sum-stage-" + stage);
         if (el) el.textContent = String(sums[stage]);
       }
     };
 
+    var recalc = function () {
+      sums = {};
+      stages.forEach(function (stage) {
+        sums[stage] = 0;
+      });
+      selected.forEach(function (key) {
+        var btn = buttonByKey[key];
+        if (!btn) return;
+        var stage = parseInt(btn.dataset.stage || "0", 10);
+        var code = parseInt(btn.dataset.code || "0", 10);
+        if (stages.indexOf(stage) >= 0 && !Number.isNaN(code)) {
+          sums[stage] += code;
+        }
+      });
+      render();
+    };
+
+    var persistSelected = function () {
+      if (!canStore) return;
+      localStorage.setItem(selectedStorageKey, JSON.stringify(Array.from(selected)));
+    };
+
+    var restoreSelected = function () {
+      if (!canStore) return;
+      var raw = localStorage.getItem(selectedStorageKey);
+      if (!raw) return;
+      try {
+        var parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed)) return;
+        parsed.forEach(function (key) {
+          if (!buttonByKey[key]) return;
+          selected.add(key);
+          buttonByKey[key].classList.add("selected-code");
+        });
+      } catch (err) {
+        localStorage.removeItem(selectedStorageKey);
+      }
+    };
+
+    var restoreMinimized = function () {
+      if (!overlay || !toggleBtn || !canStore) return;
+      var minimized = localStorage.getItem(minimizedStorageKey) === "1";
+      overlay.classList.toggle("minimized", minimized);
+      toggleBtn.textContent = minimized ? "+" : "-";
+      toggleBtn.setAttribute("aria-expanded", minimized ? "false" : "true");
+    };
+
     buttons.forEach(function (btn) {
       btn.addEventListener("click", function () {
         var key = btn.dataset.key;
-        var stage = parseInt(btn.dataset.stage || "0", 10);
-        var code = parseInt(btn.dataset.code || "0", 10);
-        if (!key || stage < 1 || stage > 5 || Number.isNaN(code)) return;
+        if (!key) return;
 
         if (selected.has(key)) {
           selected.delete(key);
-          sums[stage] -= code;
           btn.classList.remove("selected-code");
         } else {
           selected.add(key);
-          sums[stage] += code;
           btn.classList.add("selected-code");
         }
-        render();
+        recalc();
+        persistSelected();
       });
     });
 
@@ -349,10 +414,15 @@
         var minimized = overlay.classList.toggle("minimized");
         toggleBtn.textContent = minimized ? "+" : "-";
         toggleBtn.setAttribute("aria-expanded", minimized ? "false" : "true");
+        if (canStore) {
+          localStorage.setItem(minimizedStorageKey, minimized ? "1" : "0");
+        }
       });
     }
 
-    render();
+    restoreSelected();
+    recalc();
+    restoreMinimized();
   })();
 </script>
 <script>

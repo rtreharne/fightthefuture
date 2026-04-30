@@ -9,14 +9,27 @@ from django.conf import settings
 from .constants import STAGE_COUNT
 
 
-@lru_cache(maxsize=1)
-def _load_stage_config() -> dict:
-    config_path = Path(settings.BASE_DIR) / "game" / "stages.yaml"
+def _stage_config_path() -> Path:
+    return Path(settings.BASE_DIR) / "game" / "stages.yaml"
+
+
+@lru_cache(maxsize=8)
+def _load_stage_config_cached(mtime_ns: int) -> dict:
+    config_path = _stage_config_path()
     with config_path.open("r", encoding="utf-8") as handle:
         loaded = yaml.safe_load(handle) or {}
     if not isinstance(loaded, dict):
         return {}
     return loaded
+
+
+def _load_stage_config() -> dict:
+    config_path = _stage_config_path()
+    try:
+        mtime_ns = config_path.stat().st_mtime_ns
+    except OSError:
+        return {}
+    return _load_stage_config_cached(mtime_ns)
 
 
 def _apply_tokens(value, tokens: dict[str, str]):

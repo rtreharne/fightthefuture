@@ -1,11 +1,16 @@
+from collections import defaultdict
 from datetime import timedelta
+import csv
+from io import BytesIO, StringIO
 import re
+import zipfile
 
 from django.conf import settings
 from django.test import TestCase
 from django.utils import timezone
 
-from game.models import Player, Run, StageCode
+from game.constants import FINAL_STAGE
+from game.models import Player, PlayerFeedback, Run, StageCode
 from game.services import create_player, pause_current_run, start_run
 
 
@@ -109,6 +114,50 @@ class PodiumProgressionTests(TestCase):
         self.assertContains(response, "p1")
         self.assertNotContains(response, "Submission #")
         self.assertIsNotNone(re.search(r"\[\d{2}:\d{2}:\d{2}\]\s+code=", response.content.decode()))
+
+    def test_final_stage_submission_shows_celebration_and_feedback_flow(self):
+        self.run.collaboration_size_cap = 2
+        self.run.save(update_fields=["collaboration_size_cap"])
+        p1 = create_player(self.run, "p1")
+        p2 = create_player(self.run, "p2")
+
+        Player.objects.filter(id__in=[p1.id, p2.id]).update(
+            current_stage=FINAL_STAGE,
+            intro_accepted=True,
+            orientation_completed=True,
+            orientation_collapsed=True,
+        )
+        stage_sum = StageCode.objects.get(player=p1, stage=FINAL_STAGE).code + StageCode.objects.get(player=p2, stage=FINAL_STAGE).code
+
+        podium_response = self.client.post("/podium", {"action": "submit", "code": str(stage_sum)}, follow=True)
+        self.assertContains(podium_response, "Congratulations! You have captured and disabled AUGUR. The city is safe!")
+
+        p1.refresh_from_db()
+        self.assertTrue(p1.is_complete)
+
+        play_response = self.client.get(f"/play/{p1.id}")
+        self.assertContains(play_response, "AUGUR DISABLED")
+        self.assertContains(play_response, "Submit Feedback")
+
+        feedback_post = self.client.post(
+            f"/play/{p1.id}",
+            {
+                "action": "submit_feedback",
+                "session_engaging": "5",
+                "scenario_meaningful": "4",
+                "challenge_appropriate": "4",
+                "different_workshop_positive": "5",
+                "worked_effectively_with_others": "5",
+                "instructions_clear": "5",
+                "recommend_to_student": "5",
+                "attend_again": "5",
+                "best_part": "Great scenario.",
+                "improve_future": "More time for debrief.",
+            },
+            follow=True,
+        )
+        self.assertContains(feedback_post, "Thanks for your feedback.")
+        self.assertTrue(PlayerFeedback.objects.filter(player=p1).exists())
 
 
 class TeacherDashboardTests(TestCase):
@@ -477,7 +526,7 @@ class PersonalCheckerTests(TestCase):
             "Correct. Combine your code with 1 collaborator and enter the sum into AUGUR PODIUM.",
         )
 
-    def test_async_checker_success_stage2_dynamic_solo_when_no_partners(self):
+    def test_async_checker_success_stage2_waits_when_no_other_players(self):
         self.player.current_stage = 2
         self.player.checker_stage = None
         self.player.checker_verified_stage = None
@@ -496,7 +545,62 @@ class PersonalCheckerTests(TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertTrue(payload["ok"])
+        self.assertEqual(
+            payload["message"],
+            "Correct. Your personal code is verified. Wait until more players reach this stage, then combine your codes and enter the sum into AUGUR PODIUM.",
+        )
+
+    def test_async_checker_success_stage2_allows_stranded_player_to_submit(self):
+        self.player.current_stage = 2
+        self.player.checker_stage = None
+        self.player.checker_verified_stage = None
+        self.player.save(update_fields=["current_stage", "checker_stage", "checker_verified_stage"])
+        ahead = create_player(self.run, "already_ahead")
+        ahead.current_stage = 3
+        ahead.save(update_fields=["current_stage"])
+        stage2_code = StageCode.objects.get(player=self.player, stage=2).code
+
+        response = self.client.post(
+            f"/play/{self.player.id}",
+            {
+                "action": "check_solution",
+                "personal_code": str(stage2_code),
+                "response_format": "json",
+            },
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
         self.assertEqual(payload["message"], "Correct. Enter your code into AUGUR PODIUM.")
+
+    def test_verified_view_message_is_dynamic_when_collaboration_cap_is_one(self):
+        self.player.current_stage = 2
+        self.player.checker_stage = None
+        self.player.checker_verified_stage = None
+        self.player.save(update_fields=["current_stage", "checker_stage", "checker_verified_stage"])
+        self.run.collaboration_size_cap = 1
+        self.run.save(update_fields=["collaboration_size_cap"])
+        stage2_code = StageCode.objects.get(player=self.player, stage=2).code
+
+        response = self.client.post(
+            f"/play/{self.player.id}",
+            {
+                "action": "check_solution",
+                "personal_code": str(stage2_code),
+                "response_format": "json",
+            },
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["message"], "Correct. Enter your code into AUGUR PODIUM.")
+
+        persisted = self.client.get(f"/play/{self.player.id}")
+        self.assertEqual(persisted.status_code, 200)
+        self.assertContains(persisted, "Correct. Enter your code into AUGUR PODIUM.")
+        self.assertNotContains(persisted, "Combine your code with 0 collaborators")
 
     def test_async_checker_wrong_answer_returns_direction_hint(self):
         response = self.client.post(
@@ -569,6 +673,10 @@ class StageContentTests(TestCase):
         stage1_code = StageCode.objects.get(player=self.player, stage=1).code
         response = self.client.get(f"/play/{self.player.id}/dataset/1")
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response["Content-Disposition"],
+            'attachment; filename="stage1_dataset.csv"',
+        )
 
         lines = response.content.decode().strip().splitlines()
         header = lines[0].split(",")
@@ -586,3 +694,184 @@ class StageContentTests(TestCase):
         ]
         decoded_code = "".join(decoded_digits)
         self.assertEqual(decoded_code, f"{stage1_code:06d}")
+
+    def test_stage2_uses_ghost_audit_content_and_python_run_command(self):
+        self.player.current_stage = 2
+        self.player.orientation_language = Player.OrientationLanguage.PYTHON
+        self.player.save(update_fields=["current_stage", "orientation_language"])
+        partner = create_player(self.run, "partner2")
+        partner.current_stage = 2
+        partner.save(update_fields=["current_stage"])
+
+        response = self.client.get(f"/play/{self.player.id}")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Stage 2: Ghost Audit")
+        self.assertContains(response, "AUGUR noticed the first breach.")
+        self.assertContains(response, "stage2_ghost_audit.py")
+        self.assertContains(response, "python stage2_ghost_audit.py stage2_dataset.csv")
+        self.assertContains(response, "load = units * multiplier")
+        self.assertContains(response, "Work with 1 collaborator")
+
+    def test_stage3_uses_signal_test_content_and_python_run_command(self):
+        self.player.current_stage = 3
+        self.player.orientation_language = Player.OrientationLanguage.PYTHON
+        self.player.save(update_fields=["current_stage", "orientation_language"])
+
+        response = self.client.get(f"/play/{self.player.id}")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Stage 3: Signal Test")
+        self.assertContains(response, "AUGUR has stopped simply hiding information.")
+        self.assertContains(response, "Create a new script file in your preferred programming language")
+        self.assertNotContains(response, "stage3_signal_test.py")
+        self.assertNotContains(response, "python stage3_signal_test.py stage3_signal_readings.csv")
+        self.assertContains(response, "ANOVA and post-hoc tests")
+
+    def test_stage4_uses_forever_alone_drone_content(self):
+        self.player.current_stage = 4
+        self.player.orientation_language = Player.OrientationLanguage.PYTHON
+        self.player.save(update_fields=["current_stage", "orientation_language"])
+
+        response = self.client.get(f"/play/{self.player.id}")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Stage 4: Isolate and Capture")
+        self.assertContains(response, "There are 99 drones in total.")
+        self.assertContains(response, "Download the Stage 4 ZIP dataset")
+        self.assertContains(response, "drone_serials.csv")
+
+    def test_collaboration_requirement_respects_teacher_cap(self):
+        self.player.current_stage = 2
+        self.player.orientation_language = Player.OrientationLanguage.PYTHON
+        self.player.save(update_fields=["current_stage", "orientation_language"])
+        partner = create_player(self.run, "partner_cap")
+        partner.current_stage = 2
+        partner.save(update_fields=["current_stage"])
+
+        self.run.collaboration_size_cap = 1
+        self.run.save(update_fields=["collaboration_size_cap"])
+
+        response = self.client.get(f"/play/{self.player.id}")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "No collaborators required.")
+        self.assertNotContains(response, "Work with 1 collaborator")
+
+    def test_stage2_dataset_decodes_to_player_stage2_code(self):
+        stage2_code = StageCode.objects.get(player=self.player, stage=2).code
+        response = self.client.get(f"/play/{self.player.id}/dataset/2")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response["Content-Disposition"],
+            'attachment; filename="stage2_dataset.csv"',
+        )
+
+        rows = list(csv.DictReader(StringIO(response.content.decode())))
+        self.assertGreaterEqual(len(rows), 80)
+        self.assertTrue(rows)
+        self.assertEqual(
+            set(rows[0].keys()),
+            {"record_id", "sector", "status", "authentic", "priority", "units", "multiplier", "bias_key"},
+        )
+
+        sectors = {row["sector"] for row in rows}
+        self.assertTrue(
+            {"power", "traffic", "water", "emergency", "communications", "waste", "transit"}.issubset(sectors)
+        )
+
+        bias_values = {row["bias_key"] for row in rows}
+        self.assertEqual(len(bias_values), 1)
+        bias_key = int(next(iter(bias_values)))
+
+        valid_rows = [
+            row for row in rows
+            if (
+                row["status"] == "ACTIVE"
+                and int(row["authentic"]) == 1
+                and int(row["priority"]) >= 4
+            )
+        ]
+        self.assertTrue(valid_rows)
+
+        decoded = (sum(int(row["units"]) * int(row["multiplier"]) for row in valid_rows) + bias_key) % 1_000_000
+        self.assertEqual(decoded, stage2_code)
+
+        self.assertTrue(any(row["status"] != "ACTIVE" for row in rows))
+        self.assertTrue(any(int(row["authentic"]) == 0 for row in rows))
+        self.assertTrue(any(int(row["priority"]) < 4 for row in rows))
+
+    def test_stage3_dataset_decodes_to_player_stage3_code(self):
+        stage3_code = StageCode.objects.get(player=self.player, stage=3).code
+        response = self.client.get(f"/play/{self.player.id}/dataset/3")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response["Content-Disposition"],
+            'attachment; filename="stage3_signal_readings.csv"',
+        )
+
+        rows = list(csv.DictReader(StringIO(response.content.decode())))
+        self.assertTrue(rows)
+        self.assertEqual(
+            set(rows[0].keys()),
+            {"reading_id", "district", "signal_strength", "district_code"},
+        )
+
+        counts_by_district: dict[str, int] = defaultdict(int)
+        districts = set()
+        signal_by_district: dict[str, list[float]] = defaultdict(list)
+        district_codes_by_district: dict[str, set[int]] = defaultdict(set)
+
+        for row in rows:
+            district = row["district"]
+            counts_by_district[district] += 1
+            districts.add(district)
+            signal_by_district[district].append(float(row["signal_strength"]))
+            district_codes_by_district[district].add(int(row["district_code"]))
+
+        self.assertGreaterEqual(len(districts), 20)
+        for district in districts:
+            self.assertEqual(len(district_codes_by_district[district]), 1)
+            self.assertGreaterEqual(counts_by_district[district], 60)
+
+        matching_districts = [
+            district
+            for district in districts
+            if next(iter(district_codes_by_district[district])) == stage3_code
+        ]
+        self.assertEqual(len(matching_districts), 1)
+        abnormal_district = matching_districts[0]
+
+        decoded = next(iter(district_codes_by_district[abnormal_district])) % 1_000_000
+        self.assertEqual(decoded, stage3_code)
+
+        means_by_district = {
+            district: sum(values) / len(values)
+            for district, values in signal_by_district.items()
+        }
+        highest_mean_district = max(means_by_district, key=means_by_district.get)
+        lowest_mean_district = min(means_by_district, key=means_by_district.get)
+        self.assertNotIn(abnormal_district, {highest_mean_district, lowest_mean_district})
+
+    def test_stage4_dataset_zip_contains_images_and_serial_mapping(self):
+        stage4_code = StageCode.objects.get(player=self.player, stage=4).code
+        response = self.client.get(f"/play/{self.player.id}/dataset/4")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response["Content-Disposition"],
+            'attachment; filename="stage4_drone_fleet.zip"',
+        )
+
+        archive = zipfile.ZipFile(BytesIO(response.content))
+        names = archive.namelist()
+        image_names = sorted(name for name in names if name.startswith("images/") and name.endswith(".png"))
+        self.assertEqual(len(image_names), 100)
+        self.assertIn("drone_serials.csv", names)
+
+        mapping_rows = list(csv.DictReader(StringIO(archive.read("drone_serials.csv").decode())))
+        self.assertEqual(len(mapping_rows), 99)
+        self.assertEqual(
+            set(mapping_rows[0].keys()),
+            {"drone_id", "serial_number"},
+        )
+        drone_ids = {int(row["drone_id"]) for row in mapping_rows}
+        self.assertEqual(drone_ids, set(range(1, 100)))
+
+        matching = [row for row in mapping_rows if int(row["serial_number"]) == stage4_code]
+        self.assertEqual(len(matching), 1)

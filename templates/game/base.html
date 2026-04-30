@@ -17,6 +17,18 @@
       --ok: #63ff63;
       --err: #7dff7d;
       --line: #2cff2c;
+      --muted: #9dff9d;
+    }
+    [data-theme="light"] {
+      --bg: #ffffff;
+      --panel: #ffffff;
+      --ink: #000000;
+      --accent: #000000;
+      --warn: #734e00;
+      --ok: #0a5f0a;
+      --err: #8f0000;
+      --line: #000000;
+      --muted: #444444;
     }
     body {
       margin: 0;
@@ -117,7 +129,7 @@
       border-radius: 0;
       padding: 1px 5px;
     }
-    .muted { color: #9dff9d; }
+    .muted { color: var(--muted); }
     .list-inline {
       display: flex;
       flex-wrap: wrap;
@@ -152,6 +164,48 @@
       caret-color: var(--ink);
       caret-shape: block;
     }
+    .theme-toggle-box {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      width: 32px;
+      height: 32px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      z-index: 1000;
+      padding: 0;
+    }
+    .theme-toggle-box:hover {
+      background: var(--ink);
+      color: var(--bg);
+    }
+    .theme-toggle-box:focus {
+      outline: none;
+      box-shadow: inset 0 0 0 1px var(--ink);
+    }
+    .eye-icon {
+      width: 14px;
+      height: 8px;
+      border: 1.5px solid currentColor;
+      border-radius: 50% / 65%;
+      position: relative;
+      display: block;
+    }
+    .eye-icon::after {
+      content: "";
+      position: absolute;
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: currentColor;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+    }
     @media (max-width: 720px) {
       body {
         font-size: 14px;
@@ -172,6 +226,9 @@
   </style>
 </head>
 <body>
+  <button id="theme-toggle" type="button" class="theme-toggle-box" aria-label="Switch color scheme" title="Switch color scheme">
+    <span class="eye-icon" aria-hidden="true"></span>
+  </button>
   <div class="wrap">
     {% if messages %}
       <ul class="messages">
@@ -182,6 +239,34 @@
     {% endif %}
 
     {% block content %}{% endblock %}
+    <footer style="margin-top: 18px; font-size: 12px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 8px;">
+      Created by Rob Treharne, University of Liverpool &copy;, {% now "Y" %} |
+      <a href="https://github.com/rtreharne/fightthefuture" target="_blank" rel="noopener noreferrer">GitHub Project</a>
+    </footer>
   </div>
+  <script>
+    (function () {
+      var key = "augur-theme";
+      var root = document.documentElement;
+      var button = document.getElementById("theme-toggle");
+      if (!button) return;
+
+      var saved = localStorage.getItem(key);
+      if (saved === "light") {
+        root.setAttribute("data-theme", "light");
+      }
+
+      button.addEventListener("click", function () {
+        var isLight = root.getAttribute("data-theme") === "light";
+        if (isLight) {
+          root.removeAttribute("data-theme");
+          localStorage.setItem(key, "dark");
+        } else {
+          root.setAttribute("data-theme", "light");
+          localStorage.setItem(key, "light");
+        }
+      });
+    })();
+  </script>
 </body>
 </html>

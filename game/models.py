@@ -187,3 +187,24 @@ class SubmissionCandidate(models.Model):
 
     def __str__(self) -> str:
         return f"Candidate {self.id} for submission {self.submission_id}"
+
+
+class PlayerFeedback(models.Model):
+    run = models.ForeignKey(Run, on_delete=models.CASCADE, related_name="player_feedback")
+    player = models.OneToOneField(Player, on_delete=models.CASCADE, related_name="feedback")
+    clarity_rating = models.PositiveSmallIntegerField(validators=[MinValueValidator(1), MaxValueValidator(5)])
+    engagement_rating = models.PositiveSmallIntegerField(validators=[MinValueValidator(1), MaxValueValidator(5)])
+    collaboration_rating = models.PositiveSmallIntegerField(validators=[MinValueValidator(1), MaxValueValidator(5)])
+    confidence_rating = models.PositiveSmallIntegerField(validators=[MinValueValidator(1), MaxValueValidator(5)])
+    pacing_rating = models.PositiveSmallIntegerField(validators=[MinValueValidator(1), MaxValueValidator(5)])
+    comments = models.TextField(blank=True)
+    likert_responses = models.JSONField(default=dict, blank=True)
+    open_responses = models.JSONField(default=dict, blank=True)
+    submitted_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-submitted_at"]
+
+    def __str__(self) -> str:
+        return f"Feedback {self.player.username} ({self.run})"

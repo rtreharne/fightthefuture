@@ -2,7 +2,8 @@
 
 {% block content %}
 <div class="panel">
-  <h2 style="margin-top: 0;">Join Current Run</h2>
+  <h2 style="margin-top: 0;">Fight The Future</h2>
+  <p class="muted" style="margin-top: -4px;"><strong>Join current run.</strong></p>
   {% if run %}
     <p>Run: <strong>{{ run.name }}</strong> | Status: <strong>{{ run.get_status_display }}</strong></p>
   {% else %}
@@ -14,7 +15,7 @@
     <label for="username">User name</label>
     <p class="muted" style="margin-top: 0;">No spaces. Use a unique handle with at least one number (example: <code>dave23</code>).</p>
     <input id="username" name="username" type="text" maxlength="80" required placeholder="dave23" pattern="[A-Za-z0-9._-]+">
-    <button type="submit">Enter Game</button>
+    <button type="submit">Enter Crisis Control Centre</button>
   </form>
 </div>
 

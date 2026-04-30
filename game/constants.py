@@ -1,14 +1,13 @@
-STAGE_COUNT = 5
+STAGE_COUNT = 4
 FINAL_STAGE = STAGE_COUNT
 COMPLETED_STAGE = STAGE_COUNT + 1
 
-# Stage 1 is solo; stages 2-5 require exact collaboration sizes.
+# Stage 1 is solo; stages 2-4 require exact collaboration sizes.
 STAGE_GROUP_SIZES = {
     1: 1,
     2: 2,
     3: 4,
     4: 8,
-    5: 8,
 }
 
 STAGE_DETAILS = {
@@ -25,11 +24,7 @@ STAGE_DETAILS = {
         "instructions": "Placeholder challenge instructions for stage 3.",
     },
     4: {
-        "title": "Stage 4: Mesh Synchronisation",
+        "title": "Stage 4: Forever Alone Drone",
         "instructions": "Placeholder challenge instructions for stage 4.",
-    },
-    5: {
-        "title": "Stage 5: Final Relay",
-        "instructions": "Placeholder challenge instructions for stage 5.",
     },
 }

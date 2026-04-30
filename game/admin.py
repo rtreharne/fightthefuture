@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Player, PodiumSubmission, Run, StageCode, SubmissionCandidate
+from .models import Player, PlayerFeedback, PodiumSubmission, Run, StageCode, SubmissionCandidate
 
 
 @admin.register(Run)
@@ -53,3 +53,19 @@ class PodiumSubmissionAdmin(admin.ModelAdmin):
 class SubmissionCandidateAdmin(admin.ModelAdmin):
     list_display = ("id", "submission", "stage", "player_ids", "created_at")
     list_filter = ("stage",)
+
+
+@admin.register(PlayerFeedback)
+class PlayerFeedbackAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "player",
+        "run",
+        "clarity_rating",
+        "engagement_rating",
+        "collaboration_rating",
+        "confidence_rating",
+        "pacing_rating",
+        "submitted_at",
+    )
+    list_filter = ("run",)

@@ -2,14 +2,26 @@ stages:
   1:
     title: "Stage 1: Signal Capture"
     has_dataset: true
-    narrative: "AUGUR's first control node is leaking fragmented PIN signals. The stream is corrupted, but not beyond recovery. Repair the script, decode the signal rows, and recover the 6-digit unlock PIN tied to your identity."
+    narrative: |
+      Your personal terminal flickers into life.
+
+      AUGUR has locked the city behind a sequence of access checks, but the first barrier is still unstable. Buried inside your terminal feed is a fragmented emergency unlock signal. Most of the stream is noise. Some rows are decoys. Some are real. Hidden inside the surviving signal is a 6-digit PIN tied to your operator identity.
+
+      AUGUR has also corrupted the recovery script before leaving it behind. Subtle. Annoying. Very on brand.
+
+      Your first job is not to write something from scratch. It is to do what real analysts and developers often have to do under pressure: take a broken script, repair it, run it on messy data, and recover the result.
+
+      Fix the syntax error. Process the dataset. Filter the valid signal rows. Decode the digits in the correct order.
+
+      This is your first breach point.
+
+      Recover your personal 6-digit Stage 1 code and submit it to AUGUR PODIUM.
     instructions:
       - "Create a new directory called stage_1 in your VS Code project."
       - "Create a new script file in that directory using the filename below for your chosen language."
       - "Download the Stage 1 dataset from this page and save it in stage_1 as stage1_dataset.csv."
       - "Copy and paste the starter code exactly as shown, then debug syntax errors until it runs."
       - "Run the corrected script on stage1_dataset.csv to extract your personal 6-digit stage code."
-      - "Enter that 6-digit code into AUGUR PODIUM."
     language_variants:
       r:
         file_name: "stage1_signal.R"
@@ -128,25 +140,99 @@ stages:
           print("".join(digits))
 
   2:
-    title: "Stage 2: Pattern Decode"
+    title: "Stage 2: Ghost Audit"
     has_dataset: true
+    narrative: |
+      AUGUR noticed the first breach.
+
+      Your personal terminal is still online, but the city systems are starting to fragment. Power, traffic, water and emergency services are all reporting maintenance activity. At first glance, the audit file looks routine.
+
+      It is not routine.
+
+      AUGUR has filled the city ledger with ghost operations: fake repairs, duplicated tasks and low-priority distractions designed to bury the real failures. Somewhere in this file is the next 6-digit access code, generated specifically for your operator identity.
+
+      This time, there is no broken starter script to repair. You need to write the logic yourself.
+
+      Filter the ledger. Find the real emergency records. Calculate the recovery load. Generate the code.
+
     instructions:
-      - "Stage 2 challenge content coming next."
+      - "Create a new directory called stage_2 in your VS Code project."
+      - "Download the Stage 2 dataset from this page and save it in stage_2 as stage2_dataset.csv."
+      - "Create a new script file called stage2_ghost_audit.py inside your stage_2 directory."
+      - "Your script should read stage2_dataset.csv."
+      - "Keep only rows where status is ACTIVE, authentic is 1, and priority is greater than or equal to 4."
+      - "For each remaining row, calculate load = units * multiplier."
+      - "Add all load values together."
+      - "Add the value of bias_key."
+      - "Take the final total <a href=\"https://en.wikipedia.org/wiki/Modulo\" target=\"_blank\" rel=\"noopener noreferrer\">modulo</a> 1000000."
+      - "Print the result as a 6-digit code, including leading zeroes if needed."
+      - "Follow the collaboration requirement shown on this page when submitting your code to AUGUR PODIUM."
+    language_variants:
+      python:
+        file_name: "stage2_ghost_audit.py"
+        run_command: "python stage2_ghost_audit.py stage2_dataset.csv"
+      default:
+        file_name: "stage2_ghost_audit.py"
+        run_command: "python stage2_ghost_audit.py stage2_dataset.csv"
 
   3:
-    title: "Stage 3: Protocol Recovery"
+    title: "Stage 3: Signal Test"
     has_dataset: true
+    narrative: |
+      AUGUR has stopped simply hiding information.
+
+      It is now producing false signals.
+
+      Across the city, district signal monitors are reporting strange behaviour. Some variation is expected: sensors drift, networks lag, and old infrastructure makes noises that nobody fully understands. But one district is not behaving normally.
+
+      Your personal terminal has captured signal readings from multiple city districts. Most of the data is ordinary background noise. One district contains a pattern that should not be there.
+
+      Do not trust a single reading. Do not trust a quick glance. AUGUR is counting on you mistaking noise for evidence.
+
+      Compare the districts. Find where the `signal_strength` pattern breaks. Then recover the district code and submit it to AUGUR PODIUM.
+
+      You remember one of your old lecturers talking about ANOVA for this kind of problem. He did say "It'll come in handy one day!". And damnit, he was right.
+
     instructions:
-      - "Stage 3 challenge content coming next."
+      - "Create a new directory called stage_3 in your VS Code project."
+      - "Download the Stage 3 dataset from this page and save it in stage_3 as stage3_signal_readings.csv."
+      - "Create a new script file in your preferred programming language inside your stage_3 directory."
+      - "Your script should read stage3_signal_readings.csv."
+      - "The dataset contains signal readings from several city districts."
+      - "Use ANOVA and post-hoc tests on signal_strength across districts."
+      - "Find the abnormal district where signal_strength behaves differently from the others."
+      - "Once you identify the abnormal district, read its district_code value."
+      - "Print that district_code as a 6-digit code, including leading zeroes if needed."
+      - "Enter that 6-digit code into AUGUR PODIUM."
+      - "HINT: Mention ANOVA and post-hoc tests explicitly in your chat prompts."
+      - "Follow the collaboration requirement shown on this page when submitting your code to AUGUR PODIUM."
 
   4:
-    title: "Stage 4: Mesh Synchronisation"
+    title: "Stage 4: Isolate and Capture"
     has_dataset: true
-    instructions:
-      - "Stage 4 challenge content coming next."
+    narrative: |
+      AUGUR has panicked.
 
-  5:
-    title: "Stage 5: Final Relay"
-    has_dataset: true
+      In order to prevent you isolating it, it has copied its source code into one of the city's emergency response drones and fled with the full fleet.
+
+      There are 99 drones in total.
+
+      Your terminal feed contains security camera snapshots from around the city and a drone serial mapping file.
+
+      One drone carries AUGUR's copied core. To stay hidden, AUGUR keeps that drone away from nearby traffic so it can break formation and evade interception.
+
+      That isolation pattern is your opening: find the drone that stays most separated from the others, isolate it and capture it!
+
+      The serial number on that drone is your final personal 6-digit code.
     instructions:
-      - "Stage 5 challenge content coming next."
+      - "Create a new directory called stage_4 in your VS Code project."
+      - "Download the Stage 4 ZIP dataset from this page and extract it into stage_4."
+      - "The ZIP contains 100 PNG camera images plus drone_serials.csv, which maps drone_id to serial_number."
+      - "Each image contains a subset of drones from the 99-drone fleet."
+      - "For each image, compute each visible drone's average <a href=\"https://en.wikipedia.org/wiki/Euclidean_distance\" target=\"_blank\" rel=\"noopener noreferrer\">Euclidean</a> distance to all other visible drones in that same image."
+      - "For each drone_id, average those per-image values across the images where that drone appears."
+      - "Identify the drone with the highest overall average distance score."
+      - "Find that drone_id in the CSV mapping file."
+      - "Read its serial_number and print it as a 6-digit code."
+      - "Enter that 6-digit code into AUGUR PODIUM."
+      - "Follow the collaboration requirement shown on this page when submitting your code to AUGUR PODIUM."

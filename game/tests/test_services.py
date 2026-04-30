@@ -103,15 +103,26 @@ class MatchingEngineTests(TestCase):
         self.assertEqual(stage1[0].required_size, 2)
         self.assertEqual(set(stage1[0].player_ids), {a.id, b.id})
 
-    def test_default_group_size_falls_back_when_stage_population_is_small(self):
-        solo = self._create_player_with_stage_code("solo_s2", 2, 234567)
+    def test_collaboration_stage_requires_wait_when_only_one_player_available(self):
+        self._create_player_with_stage_code("solo_s2", 2, 234567)
 
         matches = find_matching_groups(self.run, 234567)
         stage2 = [m for m in matches if m.stage == 2]
 
+        self.assertEqual(stage2, [])
+
+    def test_stranded_player_can_progress_solo_when_all_others_are_ahead(self):
+        solo = self._create_player_with_stage_code("solo_s2", 2, 345678)
+        ahead = self._create_player_with_stage_code("ahead_s3", 3, 222222)
+        ahead.current_stage = 3
+        ahead.save(update_fields=["current_stage"])
+
+        matches = find_matching_groups(self.run, 345678)
+        stage2 = [m for m in matches if m.stage == 2]
+
         self.assertEqual(len(stage2), 1)
         self.assertEqual(stage2[0].required_size, 1)
-        self.assertEqual(list(stage2[0].player_ids), [solo.id])
+        self.assertEqual(set(stage2[0].player_ids), {solo.id})
 
     def test_suspended_players_are_excluded_from_matching(self):
         a = self._create_player_with_stage_code("s2_a", 2, 140000)

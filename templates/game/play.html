@@ -1,4 +1,5 @@
 {% extends "game/base.html" %}
+{% load game_extras %}
 
 {% block content %}
 <style>
@@ -21,10 +22,80 @@
     border: 1px solid var(--line);
     padding: 8px;
   }
+  .feedback-grid {
+    display: grid;
+    gap: 10px;
+  }
+  .likert-question {
+    border: 1px solid var(--line);
+    padding: 8px;
+  }
+  .likert-question label {
+    display: block;
+  }
+  .likert-scale {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(44px, 1fr));
+    gap: 6px;
+    align-items: center;
+    margin-top: 6px;
+    max-width: 340px;
+  }
+  .likert-scale label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    justify-content: center;
+  }
+  .likert-scale input[type="radio"] {
+    width: 16px;
+    min-height: 16px;
+    height: 16px;
+    margin: 0;
+  }
+  .open-question {
+    margin-bottom: 10px;
+  }
+  .open-question label {
+    display: block;
+  }
+  .open-question textarea {
+    display: block;
+    width: 100%;
+    margin-top: 6px;
+  }
+  .completion-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.82);
+    z-index: 1200;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 14px;
+  }
+  .completion-modal.open {
+    display: flex;
+  }
+  .completion-modal-card {
+    max-width: 640px;
+    width: 100%;
+    border: 1px solid var(--ok);
+    background: var(--panel);
+    padding: 14px;
+    color: var(--ok);
+  }
+  #player-confetti {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 1190;
+  }
 </style>
 {% if not player.intro_accepted %}
 <div class="panel">
-  <h2 style="margin-top: 0;">Introduction</h2>
+  <h2 style="margin-top: 0;">Fight The Future</h2>
+  <p class="muted" style="margin-top: -4px;"><strong>Introduction</strong></p>
   <p>The year is 2030.</p>
   <p>Since you graduated from the University of Liverpool, the world has changed.</p>
   <p>AI is everywhere. It writes, drives, diagnoses, teaches, trades, negotiates, argues, apologises badly, and occasionally updates itself without asking. The line between human and artificial intelligence has become so blurred that most people have stopped checking where one ends and the other begins.</p>
@@ -54,21 +125,161 @@
   </p>
 
   {% if player.is_complete %}
-    <p><strong>All 5 stages completed.</strong></p>
+    <p><strong>All {{ stage_count }} stages completed.</strong></p>
     <p class="muted">You can still submit with your team at the podium.</p>
+    {% if completion_flow_eligible %}
+      <div class="panel" id="feedback-panel" style="border-color: var(--ok);">
+        <h3 style="margin-top: 0;">Mission Complete</h3>
+        <p class="success">Congratulations! You have captured and disabled AUGUR. The city is safe!</p>
+        {% if completion_feedback_submitted %}
+          <p>Thanks for your feedback.</p>
+          <p class="muted">Your responses have been recorded.</p>
+        {% else %}
+          <p class="muted">Please complete this short feedback form.</p>
+          <p class="muted"><strong>Scale key:</strong> 1 = Strongly disagree, 2 = Disagree, 3 = Neutral, 4 = Agree, 5 = Strongly agree.</p>
+          <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="submit_feedback">
+            <div class="feedback-grid">
+              {% for section_title, section_items in feedback_likert_sections %}
+                <div class="panel" style="margin: 0; padding: 10px;">
+                  <p style="margin-top: 0;"><strong>{{ section_title }}</strong></p>
+                  {% for question_key, question_label in section_items %}
+                    <div class="likert-question">
+                      <label>{{ question_label }}</label>
+                      <div class="likert-scale">
+                        {% for value in "12345"|make_list %}
+                          <label><input type="radio" name="{{ question_key }}" value="{{ value }}" required> {{ value }}</label>
+                        {% endfor %}
+                      </div>
+                    </div>
+                  {% endfor %}
+                </div>
+              {% endfor %}
+              <div class="panel" style="margin: 0; padding: 10px;">
+                <p style="margin-top: 0;"><strong>Open questions</strong></p>
+                {% for question_key, question_label in feedback_open_questions %}
+                  <div class="open-question">
+                    <label for="{{ question_key }}">{{ question_label }} <span class="muted">(optional)</span></label>
+                    <textarea id="{{ question_key }}" name="{{ question_key }}" rows="4" maxlength="3000"></textarea>
+                  </div>
+                {% endfor %}
+              </div>
+              <button type="submit">Submit Feedback</button>
+            </div>
+          </form>
+        {% endif %}
+      </div>
+      {% if show_completion_modal %}
+        <canvas id="player-confetti"></canvas>
+        <div id="completion-modal" class="completion-modal" role="dialog" aria-modal="true" aria-labelledby="completion-modal-title">
+          <div class="completion-modal-card">
+            <h3 id="completion-modal-title" style="margin-top: 0;">AUGUR DISABLED</h3>
+            <p>Congratulations! You have captured and disabled AUGUR. The city is safe!</p>
+            <p class="muted">Continue to submit a short feedback form.</p>
+            <button id="completion-modal-close" type="button">Continue</button>
+          </div>
+        </div>
+        <script>
+          (function () {
+            var modal = document.getElementById("completion-modal");
+            var closeButton = document.getElementById("completion-modal-close");
+            var feedbackPanel = document.getElementById("feedback-panel");
+            if (!modal || !closeButton) return;
+            modal.classList.add("open");
+            closeButton.addEventListener("click", function () {
+              modal.classList.remove("open");
+              if (feedbackPanel) {
+                feedbackPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+              }
+            });
+          })();
+        </script>
+        <script>
+          (function () {
+            var canvas = document.getElementById("player-confetti");
+            if (!canvas) return;
+            var ctx = canvas.getContext("2d");
+            var particles = [];
+            var colors = ["#2cff2c", "#63ff63", "#9dff9d", "#d8ff72"];
+            var start = Date.now();
+            var durationMs = 30000;
+
+            function sizeCanvas() {
+              canvas.width = window.innerWidth;
+              canvas.height = window.innerHeight;
+            }
+
+            function spawnParticle() {
+              return {
+                x: Math.random() * canvas.width,
+                y: -20,
+                vx: (Math.random() - 0.5) * 1.4,
+                vy: 1.1 + Math.random() * 2.6,
+                size: 2 + Math.random() * 4,
+                color: colors[Math.floor(Math.random() * colors.length)],
+              };
+            }
+
+            function tick() {
+              var elapsed = Date.now() - start;
+              if (elapsed > durationMs) {
+                canvas.remove();
+                return;
+              }
+              while (particles.length < 180) {
+                particles.push(spawnParticle());
+              }
+              ctx.clearRect(0, 0, canvas.width, canvas.height);
+              for (var i = 0; i < particles.length; i += 1) {
+                var p = particles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.vy += 0.012;
+                ctx.fillStyle = p.color;
+                ctx.fillRect(p.x, p.y, p.size, p.size);
+              }
+              particles = particles.filter(function (p) { return p.y < canvas.height + 30; });
+              requestAnimationFrame(tick);
+            }
+
+            sizeCanvas();
+            window.addEventListener("resize", sizeCanvas);
+            requestAnimationFrame(tick);
+          })();
+        </script>
+      {% endif %}
+    {% endif %}
   {% else %}
     <p>Current stage: <strong>{{ current_stage }}</strong></p>
     <div class="panel" style="padding: 12px;">
       <h3 style="margin-top: 0;">{{ stage_info.title }}</h3>
       {% if stage_info.narrative %}
-        <p>{{ stage_info.narrative }}</p>
+        {{ stage_info.narrative|linebreaks }}
       {% endif %}
       {% if stage_info.instructions %}
         <ol>
           {% for step in stage_info.instructions %}
-            <li>{{ step }}</li>
+            <li>{{ step|safe }}</li>
           {% endfor %}
         </ol>
+      {% endif %}
+      {% if waiting_for_collaborators %}
+        <p>
+          <strong>Collaboration requirement:</strong>
+          This stage requires collaborators. Your code is ready, but you need to wait until more players progress to this stage before submitting to AUGUR PODIUM.
+        </p>
+      {% elif required_collaborators > 0 %}
+        <p>
+          <strong>Collaboration requirement:</strong>
+          Work with {{ required_collaborators }} collaborator{% if required_collaborators != 1 %}s{% endif %}.
+          Submit the sum of all your stage codes to AUGUR PODIUM.
+        </p>
+      {% else %}
+        <p>
+          <strong>Collaboration requirement:</strong>
+          No collaborators required. Submit your own 6-digit stage code to AUGUR PODIUM.
+        </p>
       {% endif %}
 
       {% if stage_info.has_dataset %}
@@ -78,7 +289,7 @@
       {% endif %}
 
       {% if stage_info.file_name %}
-        <p>Create file: <code>{{ stage_info.file_name }}</code> inside your <code>stage_1</code> directory.</p>
+        <p>Create file: <code>{{ stage_info.file_name }}</code> inside your <code>stage_{{ current_stage }}</code> directory.</p>
       {% endif %}
       {% if stage_info.run_command %}
         <p>Run command: <code>{{ stage_info.run_command }}</code></p>
@@ -94,10 +305,16 @@
         <p><strong>Correct solution:</strong> <code>{{ checker_solution_code }}</code></p>
         {% if current_stage == 1 %}
           <p class="success">Correct. Enter your code into AUGUR PODIUM.</p>
-        {% else %}
+        {% elif waiting_for_collaborators %}
+          <p class="success">
+            Correct. Your personal code is verified. Wait until more players reach this stage, then combine your codes and enter the sum into AUGUR PODIUM.
+          </p>
+        {% elif required_collaborators > 0 %}
           <p class="success">
             Correct. Combine your code with {{ required_collaborators }} collaborator{% if required_collaborators != 1 %}s{% endif %} and enter the sum into AUGUR PODIUM.
           </p>
+        {% else %}
+          <p class="success">Correct. Enter your code into AUGUR PODIUM.</p>
         {% endif %}
       {% else %}
         <div id="checker-feedback" class="muted" aria-live="polite"></div>
@@ -352,6 +569,8 @@
         {% if player.orientation_language == "r" %}
           <p>Terminal check: <code>R --version</code></p>
           <p>If missing: install R from <a href="https://cran.r-project.org/" target="_blank" rel="noopener">CRAN</a>.</p>
+          <p>If R is installed but command is not found, add the R <code>bin</code> folder to your PATH.</p>
+          <p class="muted" style="margin-bottom: 0;">Windows: Environment Variables -> <code>Path</code> -> add e.g. <code>C:\Program Files\R\R-4.x.x\bin</code>, then restart terminal and run <code>Remove-Item Alias:r -Force -ErrorAction SilentlyContinue; R --version</code>.</p>
           <p>Recommended VS Code extension: <strong>REditorSupport</strong> (search Extensions panel).</p>
         {% elif player.orientation_language == "python" %}
           <p>Terminal check: <code>python --version</code> (fallback <code>python3 --version</code>)</p>
@@ -380,14 +599,22 @@
       {% if player.orientation_step >= 5 and player.orientation_language %}
       <div class="panel" style="margin-bottom: 0;">
         <p><strong>Step 5.</strong> Create and run a test script.</p>
+        <ol>
+          <li>In VS Code, go to <code>File</code> -> <code>Open Folder</code>.</li>
+          <li>Create a new folder to work in, for example <code>fight_the_future</code>, and open it.</li>
+          {% if player.orientation_language == "r" %}
+            <li>type the following prompt into you Agent Chat (make sure agent mode is selected, not chat or plan)</li>
+          {% elif player.orientation_language == "python" %}
+            <li>Prompt: create <code>hello.py</code> that prints <code>Hello from Python</code>.</li>
+          {% elif player.orientation_language == "javascript" %}
+            <li>Prompt: create <code>hello.js</code> that logs <code>Hello from JavaScript</code>.</li>
+          {% endif %}
+        </ol>
         {% if player.orientation_language == "r" %}
-          <p>Prompt: create <code>hello.R</code> that prints <code>Hello from R</code>.</p>
           <p>Run in terminal: <code>Rscript hello.R</code></p>
         {% elif player.orientation_language == "python" %}
-          <p>Prompt: create <code>hello.py</code> that prints <code>Hello from Python</code>.</p>
           <p>Run in terminal: <code>python hello.py</code> (or <code>python3 hello.py</code>)</p>
         {% elif player.orientation_language == "javascript" %}
-          <p>Prompt: create <code>hello.js</code> that logs <code>Hello from JavaScript</code>.</p>
           <p>Run in terminal: <code>node hello.js</code></p>
         {% endif %}
         <p class="muted">You can run scripts from the VS Code terminal.</p>
@@ -413,6 +640,8 @@
     var tick = function () {
       if (document.hidden) return;
       var pausePolling = {{ orientation_pause_polling|yesno:"true,false" }};
+      var feedbackPending = {{ completion_flow_eligible|yesno:"true,false" }} && {{ completion_feedback_submitted|yesno:"false,true" }};
+      if (feedbackPending) return;
       if (pausePolling) return;
       var active = document.activeElement;
       var tag = active && active.tagName ? active.tagName.toLowerCase() : "";
