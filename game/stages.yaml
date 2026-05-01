@@ -200,7 +200,8 @@ stages:
       - "Your script should read stage3_signal_readings.csv."
       - "The dataset contains signal readings from several city districts."
       - "Use ANOVA and post-hoc tests on signal_strength across districts."
-      - "Find the abnormal district where signal_strength behaves differently from the others."
+      - "Find the abnormal district where signal_strength behaves differently from the others. The correct district may not be the one with the highest count of significant pairwise comparisons."
+      - "Shortlist your top post-hoc candidates (typically from the top 3), then use your personal checker to confirm the correct district."
       - "Once you identify the abnormal district, read its district_code value."
       - "Print that district_code as a 6-digit code, including leading zeroes if needed."
       - "Enter that 6-digit code into AUGUR PODIUM."
@@ -227,6 +228,8 @@ stages:
     instructions:
       - "Create a new directory called stage_4 in your VS Code project."
       - "Download the Stage 4 ZIP dataset from this page and extract it into stage_4."
+      - "Fortunately, AUGUR has left behind a means to extract drone_id and x,y coordinates from each image."
+      - "In this GitHub repo, helper scripts are available at game/helpers/helper_extract_drone.py (Python) and game/helpers/helper_extract_drone.R (R)."
       - "The ZIP contains 25 PNG camera images, drone_serials.csv, and sanity_check.csv."
       - "Use sanity_check.csv as a validation file: it gives the true drone_id + x,y coordinates for 001.png and 002.png so you can confirm your image-parsing pipeline is correct before analysing all frames."
       - "Each image contains a subset of drones from the 20-drone fleet (maximum 5 drones visible per image)."
