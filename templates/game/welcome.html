@@ -1,0 +1,35 @@
+{% extends "game/base.html" %}
+
+{% block content %}
+<div class="panel">
+  <h2 style="margin-top: 0;">Welcome Script</h2>
+
+  <p>Welcome to Fight The Future.</p>
+
+  <p>The year is 2030. AUGUR, the Autonomous Urban Governance and Utility Response system, has gone rogue. Transport, power, water and emergency systems are failing. Human override has been locked out.</p>
+
+  <p>You are here because AUGUR has underestimated three things: human judgement, teamwork, and your ability to solve messy problems with code.</p>
+
+  <p>This is not a normal coding class. I am not going to teach Python line by line. Today is about using modern tools: code, data, documentation and agent-based AI, to solve problems quickly.</p>
+
+  <p>Your task is to stabilise the city by completing a sequence of challenges. Each stage will ask you to inspect data, make sense of it, use AI well, fix or generate code, and recover an access code.</p>
+
+  <p>The biggest barrier is setup. Read the orientation. Get your terminal working. If you get stuck, that is fine. But do not sit there silently. Ask. Move. Talk. Debug together.</p>
+
+  <p>If you are already set up, help someone who is not. That is not optional. That is how this session works.</p>
+
+  <p>Remember: you are not students at the University of Liverpool anymore.</p>
+
+  <p>You are crack data scientists with mad skills and the last realistic chance of stopping a sentient infrastructure system from ruining everyone’s afternoon.</p>
+
+  <p>Think clearly. Work quickly. Share what you find.</p>
+
+  <p>And don’t forget to have fun while being stressed.</p>
+
+  <p>Share findings, or the city will fail.</p>
+
+  <form method="get" action="{% url 'teacher' %}">
+    <button type="submit">Back to Teacher</button>
+  </form>
+</div>
+{% endblock %}

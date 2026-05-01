@@ -245,6 +245,23 @@ class TeacherDashboardTests(TestCase):
         player.refresh_from_db()
         self.assertFalse(player.is_suspended)
 
+    def test_welcome_page_requires_teacher_authentication(self):
+        response = self.client.get("/welcome", follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Teacher Access")
+        self.assertContains(response, "Teacher access required.")
+
+    def test_welcome_page_is_available_from_teacher_dashboard(self):
+        self._teacher_login()
+        dashboard = self.client.get("/teacher")
+        self.assertEqual(dashboard.status_code, 200)
+        self.assertContains(dashboard, "Open Welcome Script")
+
+        welcome = self.client.get("/welcome")
+        self.assertEqual(welcome.status_code, 200)
+        self.assertContains(welcome, "Welcome to Fight The Future.")
+        self.assertContains(welcome, "Back to Facilitator Dashboard")
+
 
 class OrientationWalkthroughTests(TestCase):
     def setUp(self):

@@ -1414,6 +1414,13 @@ def _teacher_authenticated(request) -> bool:
     return bool(request.session.get("teacher_authenticated", False))
 
 
+def welcome_view(request):
+    if not _teacher_authenticated(request):
+        messages.error(request, "Teacher access required.")
+        return redirect("teacher")
+    return render(request, "game/welcome.html")
+
+
 def _render_teacher(request, run):
     players = []
     stage_codes = {}

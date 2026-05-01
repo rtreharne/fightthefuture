@@ -9,4 +9,5 @@ urlpatterns = [
     path("play/<int:user_id>/dataset/<int:stage>", views.dataset_download_view, name="dataset-download"),
     path("podium", views.podium_view, name="podium"),
     path("teacher", views.teacher_view, name="teacher"),
+    path("welcome", views.welcome_view, name="welcome"),
 ]

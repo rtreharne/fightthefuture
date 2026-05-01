@@ -155,6 +155,10 @@
   </div>
 
   <div class="grid">
+    <form method="get" action="{% url 'welcome' %}">
+      <button type="submit">Open Welcome Script</button>
+    </form>
+
     <form method="post">
       {% csrf_token %}
       <input type="hidden" name="action" value="start_run">
