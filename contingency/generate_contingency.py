@@ -69,6 +69,33 @@ def _write_dataset_for_stage(player_id: int, stage: int, output_path: Path) -> N
     output_path.write_bytes(response.content)
 
 
+def _write_stage_markdown(stage: int, output_path: Path) -> None:
+    from game.stage_content import get_stage_content
+
+    content = get_stage_content(stage)
+    title = str(content.get("title") or f"Stage {stage}")
+    narrative = str(content.get("narrative") or "").strip()
+    instructions = content.get("instructions") or []
+
+    lines: list[str] = [f"# {title}", ""]
+    if narrative:
+        lines.append("## Narrative")
+        lines.append("")
+        lines.append(narrative)
+        lines.append("")
+
+    lines.append("## Instructions")
+    lines.append("")
+    if instructions:
+        for idx, item in enumerate(instructions, start=1):
+            lines.append(f"{idx}. {item}")
+    else:
+        lines.append("_No instructions defined._")
+    lines.append("")
+
+    output_path.write_text("\n".join(lines), encoding="utf-8")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Generate offline contingency datasets and teacher answer sheet."
@@ -135,9 +162,13 @@ def main() -> int:
         player_dir.mkdir(parents=True, exist_ok=True)
 
         for stage in range(1, STAGE_COUNT + 1):
+            stage_dir = player_dir / f"stage_{stage}"
+            stage_dir.mkdir(parents=True, exist_ok=True)
+
             stage_filename = _dataset_filename_for_stage(stage)
-            stage_output = player_dir / stage_filename
+            stage_output = stage_dir / stage_filename
             _write_dataset_for_stage(player_id, stage, stage_output)
+            _write_stage_markdown(stage, stage_dir / "instructions.md")
 
         stage_codes = {
             row.stage: row.code

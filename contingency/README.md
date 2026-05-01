@@ -20,10 +20,14 @@ Optional flags:
 
 The script creates:
 
-- `contingency/output/<run_name>/<username>/stage1_dataset.csv`
-- `contingency/output/<run_name>/<username>/stage2_dataset.csv`
-- `contingency/output/<run_name>/<username>/stage3_signal_readings.csv`
-- `contingency/output/<run_name>/<username>/stage4_drone_fleet.zip`
+- `contingency/output/<run_name>/<username>/stage_1/instructions.md`
+- `contingency/output/<run_name>/<username>/stage_1/stage1_dataset.csv`
+- `contingency/output/<run_name>/<username>/stage_2/instructions.md`
+- `contingency/output/<run_name>/<username>/stage_2/stage2_dataset.csv`
+- `contingency/output/<run_name>/<username>/stage_3/instructions.md`
+- `contingency/output/<run_name>/<username>/stage_3/stage3_signal_readings.csv`
+- `contingency/output/<run_name>/<username>/stage_4/instructions.md`
+- `contingency/output/<run_name>/<username>/stage_4/stage4_drone_fleet.zip`
 - `contingency/output/<run_name>/teacher_answer_sheet.csv`
 
 The answer sheet contains the correct personal 6-digit code for each stage and participant.
