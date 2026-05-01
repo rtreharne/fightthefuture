@@ -22,6 +22,13 @@ SECRET_KEY = os.getenv("SECRET_KEY", "change-me")
 DEBUG = env_bool("DEBUG", True)
 ALLOWED_HOSTS = env_list("ALLOWED_HOSTS", ["localhost", "127.0.0.1"])
 
+if not DEBUG and os.getenv("RENDER") and SECRET_KEY == "change-me":
+    raise RuntimeError("SECRET_KEY must be set when DEBUG is false.")
+
+render_hostname = os.getenv("RENDER_EXTERNAL_HOSTNAME", "").strip()
+if render_hostname and render_hostname not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(render_hostname)
+
 TEACHER_PASSCODE = os.getenv("TEACHER_PASSCODE", "teacher123")
 
 INSTALLED_APPS = [
@@ -36,6 +43,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -76,10 +84,11 @@ if os.getenv("POSTGRES_DB"):
         }
     }
 else:
+    sqlite_path = os.getenv("SQLITE_PATH", str(BASE_DIR / "db.sqlite3"))
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.sqlite3",
-            "NAME": BASE_DIR / "db.sqlite3",
+            "NAME": sqlite_path,
         }
     }
 
@@ -92,5 +101,10 @@ USE_TZ = True
 
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
+STORAGES = {
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    }
+}
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
