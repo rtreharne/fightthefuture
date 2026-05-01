@@ -1302,6 +1302,13 @@ def podium_view(request):
     run = Run.current()
     latest_submission = None
     matches = []
+    host = request.get_host().split(":", 1)[0].lower()
+    if "onrender.com" in host:
+        podium_join_url = "https://fightthefuture.onrender.com"
+    elif "uniwebdev.co.uk" in host:
+        podium_join_url = "https://fightthefuture.uniwebdev.co.uk"
+    else:
+        podium_join_url = f"{request.scheme}://{request.get_host()}"
 
     pending_submission = None
     show_finale_celebration = False
@@ -1398,6 +1405,7 @@ def podium_view(request):
             "submission_log": submission_log,
             "stage_group_sizes": STAGE_GROUP_SIZES,
             "show_finale_celebration": show_finale_celebration,
+            "podium_join_url": podium_join_url,
         },
     )
 

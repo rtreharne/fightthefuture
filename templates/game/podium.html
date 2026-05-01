@@ -17,7 +17,7 @@
 </style>
 <div class="panel">
   <h2 style="margin-top: 0;">AUGUR PODIUM</h2>
-  <p><strong>Join at <a href="https://fightthefuture.uniwebdev.co.uk" target="_blank" rel="noopener noreferrer">fightthefuture.uniwebdev.co.uk</a></strong></p>
+  <p><strong>Join at <a href="{{ podium_join_url }}" target="_blank" rel="noopener noreferrer">{{ podium_join_url|cut:"https://"|cut:"http://" }}</a></strong></p>
   {% if run %}
     <p>Run: <strong>{{ run.name }}</strong> | Status: <strong>{{ run.get_status_display }}</strong></p>
   {% else %}
