@@ -950,7 +950,7 @@ def dataset_download_view(request, user_id: int, stage: int):
 
         rng = random.Random(f"stage4:{player.id}:{stage_code}:{player.username_key}")
         target_code = int(stage_code)
-        drone_ids = list(range(1, 100))
+        drone_ids = list(range(1, 21))
         target_drone_id = rng.choice(drone_ids)
 
         serials: dict[int, int] = {target_drone_id: target_code}
@@ -973,6 +973,7 @@ def dataset_download_view(request, user_id: int, stage: int):
         radius = 14
         min_center_sep = (radius * 2) + 3
         min_winner_gap = 3.0
+        total_images = 25
 
         digit_font = {
             "0": ("111", "101", "101", "101", "111"),
@@ -1172,7 +1173,7 @@ def dataset_download_view(request, user_id: int, stage: int):
                 return dist_sum / count if count else 0.0
 
             def _make_frame(include_target: bool) -> dict[int, tuple[int, int]]:
-                drone_count = rng.randint(20, 80)
+                drone_count = rng.randint(3, 5)
                 if include_target:
                     visible = set(rng.sample(non_target_ids, drone_count - 1))
                     visible.add(target_drone_id)
@@ -1201,11 +1202,11 @@ def dataset_download_view(request, user_id: int, stage: int):
 
                 return positions
 
-            include_target_count = rng.randint(58, 72)
-            include_target_images = set(rng.sample(range(1, 101), include_target_count))
+            include_target_count = rng.randint(14, 19)
+            include_target_images = set(rng.sample(range(1, total_images + 1), include_target_count))
             non_target_ids = [drone_id for drone_id in drone_ids if drone_id != target_drone_id]
             selected_frames = [
-                _make_frame(image_idx in include_target_images) for image_idx in range(1, 101)
+                _make_frame(image_idx in include_target_images) for image_idx in range(1, total_images + 1)
             ]
 
             for _ in range(220):
@@ -1241,6 +1242,16 @@ def dataset_download_view(request, user_id: int, stage: int):
             )
             if final_winner != target_drone_id or final_winner_score < (final_runner_up + min_winner_gap):
                 raise RuntimeError("Stage 4 drone fleet generation failed to create a unique average-distance winner")
+
+            sanity_handle = StringIO()
+            sanity_handle.write("image_name,drone_id,x,y\n")
+            for image_idx in (1, 2):
+                frame = selected_frames[image_idx - 1]
+                image_name = f"{image_idx:03d}.png"
+                for drone_id in sorted(frame):
+                    px, py = frame[drone_id]
+                    sanity_handle.write(f"{image_name},{drone_id},{px},{py}\n")
+            zf.writestr("sanity_check.csv", sanity_handle.getvalue())
 
             for image_idx, positions in enumerate(selected_frames, start=1):
                 pixels = bytearray([248, 248, 248, 255] * (width * height))

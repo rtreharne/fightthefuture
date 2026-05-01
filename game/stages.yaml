@@ -215,7 +215,7 @@ stages:
 
       In order to prevent you isolating it, it has copied its source code into one of the city's emergency response drones and fled with the full fleet.
 
-      There are 99 drones in total.
+      There are 20 drones in total.
 
       Your terminal feed contains security camera snapshots from around the city and a drone serial mapping file.
 
@@ -227,12 +227,12 @@ stages:
     instructions:
       - "Create a new directory called stage_4 in your VS Code project."
       - "Download the Stage 4 ZIP dataset from this page and extract it into stage_4."
-      - "The ZIP contains 100 PNG camera images plus drone_serials.csv, which maps drone_id to serial_number."
-      - "Each image contains a subset of drones from the 99-drone fleet."
+      - "The ZIP contains 25 PNG camera images, drone_serials.csv, and sanity_check.csv."
+      - "Use sanity_check.csv as a validation file: it gives the true drone_id + x,y coordinates for 001.png and 002.png so you can confirm your image-parsing pipeline is correct before analysing all frames."
+      - "Each image contains a subset of drones from the 20-drone fleet (maximum 5 drones visible per image)."
       - "For each image, compute each visible drone's average <a href=\"https://en.wikipedia.org/wiki/Euclidean_distance\" target=\"_blank\" rel=\"noopener noreferrer\">Euclidean</a> distance to all other visible drones in that same image."
       - "For each drone_id, average those per-image values across the images where that drone appears."
       - "Identify the drone with the highest overall average distance score."
       - "Find that drone_id in the CSV mapping file."
       - "Read its serial_number and print it as a 6-digit code."
-      - "Enter that 6-digit code into AUGUR PODIUM."
       - "Follow the collaboration requirement shown on this page when submitting your code to AUGUR PODIUM."

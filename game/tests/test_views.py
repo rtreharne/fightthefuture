@@ -734,7 +734,7 @@ class StageContentTests(TestCase):
         response = self.client.get(f"/play/{self.player.id}")
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Stage 4: Isolate and Capture")
-        self.assertContains(response, "There are 99 drones in total.")
+        self.assertContains(response, "There are 20 drones in total.")
         self.assertContains(response, "Download the Stage 4 ZIP dataset")
         self.assertContains(response, "drone_serials.csv")
 
@@ -861,17 +861,25 @@ class StageContentTests(TestCase):
         archive = zipfile.ZipFile(BytesIO(response.content))
         names = archive.namelist()
         image_names = sorted(name for name in names if name.startswith("images/") and name.endswith(".png"))
-        self.assertEqual(len(image_names), 100)
+        self.assertEqual(len(image_names), 25)
         self.assertIn("drone_serials.csv", names)
+        self.assertIn("sanity_check.csv", names)
 
         mapping_rows = list(csv.DictReader(StringIO(archive.read("drone_serials.csv").decode())))
-        self.assertEqual(len(mapping_rows), 99)
+        self.assertEqual(len(mapping_rows), 20)
         self.assertEqual(
             set(mapping_rows[0].keys()),
             {"drone_id", "serial_number"},
         )
         drone_ids = {int(row["drone_id"]) for row in mapping_rows}
-        self.assertEqual(drone_ids, set(range(1, 100)))
+        self.assertEqual(drone_ids, set(range(1, 21)))
 
         matching = [row for row in mapping_rows if int(row["serial_number"]) == stage4_code]
         self.assertEqual(len(matching), 1)
+
+        sanity_rows = list(csv.DictReader(StringIO(archive.read("sanity_check.csv").decode())))
+        self.assertTrue(sanity_rows)
+        self.assertEqual(set(sanity_rows[0].keys()), {"image_name", "drone_id", "x", "y"})
+        sanity_images = {row["image_name"] for row in sanity_rows}
+        self.assertEqual(sanity_images, {"001.png", "002.png"})
+        self.assertTrue(all(int(row["drone_id"]) in drone_ids for row in sanity_rows))
