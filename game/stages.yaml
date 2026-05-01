@@ -229,7 +229,7 @@ stages:
       - "Create a new directory called stage_4 in your VS Code project."
       - "Download the Stage 4 ZIP dataset from this page and extract it into stage_4."
       - "Fortunately, AUGUR has left behind a means to extract drone_id and x,y coordinates from each image."
-      - "In this GitHub repo, helper scripts are available at game/helpers/helper_extract_drone.py (Python) and game/helpers/helper_extract_drone.R (R)."
+      - "Helper scripts are available at <a href=\"https://github.com/rtreharne/fightthefuture/blob/main/helpers/helper_extract_drone.py\" target=\"_blank\" rel=\"noopener noreferrer\">helpers/helper_extract_drone.py</a> (Python) and <a href=\"https://github.com/rtreharne/fightthefuture/blob/main/helpers/helper_extract_drone.R\" target=\"_blank\" rel=\"noopener noreferrer\">helpers/helper_extract_drone.R</a> (R)."
       - "The ZIP contains 25 PNG camera images, drone_serials.csv, and sanity_check.csv."
       - "Use sanity_check.csv as a validation file: it gives the true drone_id + x,y coordinates for 001.png and 002.png so you can confirm your image-parsing pipeline is correct before analysing all frames."
       - "Each image contains a subset of drones from the 20-drone fleet (maximum 5 drones visible per image)."
