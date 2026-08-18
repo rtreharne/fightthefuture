@@ -1,0 +1,157 @@
+{% extends "game/base.html" %}
+
+{% block content %}
+<style>
+  .event-page {
+    position: relative;
+  }
+  .event-page .panel {
+    position: relative;
+    z-index: 1;
+  }
+  #pixel-flicker {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    opacity: 0.28;
+    z-index: 0;
+  }
+</style>
+
+<div class="event-page">
+<canvas id="pixel-flicker" aria-hidden="true"></canvas>
+{% if registration_success %}
+<div class="panel" style="border-color: var(--ok); color: var(--ok);">
+  <h2 style="margin-top: 0;">Registration Confirmed</h2>
+  <p><strong>{{ registration_success.full_name }}</strong> is registered for this event.</p>
+  <p>Email: <code>{{ registration_success.email }}</code></p>
+</div>
+{% endif %}
+
+<div class="panel">
+  <h1 style="margin-top: 0;">{{ event_settings.title }}</h1>
+  <p class="muted" style="margin-top: -4px;"><strong>Build AI-powered data skills in a live crisis simulation.</strong></p>
+  <p class="muted"><strong>Open to any staff and students at the University of Liverpool.</strong></p>
+  <p><strong>Date:</strong> {{ event_date_display }}</p>
+  <p><strong>Time:</strong> {{ event_time_display }}</p>
+  <p><strong>Location:</strong> {{ event_location_display }}</p>
+</div>
+
+<div class="panel">
+  <h2 style="margin-top: 0;">Event Brief</h2>
+  <p>
+    The year is 2030. AUGUR, the city's autonomous infrastructure system, has gone rogue. Transport is failing,
+    power is unstable, emergency services are being misdirected, and human override has been locked out.
+    In <strong>Fight The Future</strong>, attendees step into the role of a crisis-response data team racing to
+    analyse evidence, expose hidden patterns, and shut the system down before the city tips into chaos.
+  </p>
+  <p>
+    This is an exciting, story-driven event built around real analytical thinking. Attendees will use
+    <strong>Python</strong>, <strong>R</strong> or <strong>ANY coding language</strong> for data analysis, work with structured datasets under time pressure,
+    and learn how to use <strong>agent-based AI</strong> to investigate problems, generate and refine code, and move
+    faster from raw data to defensible conclusions.
+  </p>
+  <p>
+    By the end of the session, attendees will have practised collaborative problem-solving, coding for analysis,
+    interpreting messy data, validating results, and using modern AI-assisted workflows in a high-energy scenario. Phew! Stick that on your LinkedIn profile.
+  </p>
+  <p class="warning">
+    Important: this event involves talking to and working with other humans. Attendees will need to collaborate in
+    order to learn and progress. If you do not want to do that, we recommend that you do not sign up.
+  </p>
+</div>
+
+<div class="panel">
+  <h2 style="margin-top: 0;">Register</h2>
+  <p class="muted">Registration is limited to <code>{{ event_domain_label }}</code> email addresses.</p>
+  <p><strong>Spaces left:</strong> {{ registration_spaces_left }} of {{ registration_limit }}</p>
+  {% if registrations_full %}
+  <p class="warning"><strong>Registration is currently full.</strong></p>
+  {% endif %}
+  <p class="muted">For more information, contact <a href="mailto:R.Treharne@liverpool.ac.uk">R.Treharne@liverpool.ac.uk</a> directly. Robert Treharne is a Senior Lecturer in the School of Biosciences.</p>
+  <form method="post" action="{% url 'register' %}">
+    {% csrf_token %}
+    <label for="full_name">Full name</label>
+    <input
+      id="full_name"
+      name="full_name"
+      type="text"
+      maxlength="200"
+      required
+      value="{{ registration_form_data.full_name }}"
+      autocomplete="name"
+    >
+
+    <label for="email">Email</label>
+    <input
+      id="email"
+      name="email"
+      type="email"
+      maxlength="254"
+      required
+      value="{{ registration_form_data.email }}"
+      autocomplete="email"
+      inputmode="email"
+      {% if registrations_full %}disabled{% endif %}
+    >
+
+    <button type="submit" {% if registrations_full %}disabled{% endif %}>Register for Event</button>
+  </form>
+</div>
+
+<script>
+  (function () {
+    var canvas = document.getElementById("pixel-flicker");
+    if (!canvas) return;
+    var prefersReducedMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (prefersReducedMotion) return;
+
+    var ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    var pixelSize = 4;
+    var density = 0.018;
+    var frameIntervalMs = 120;
+    var lastFrame = 0;
+    var color = "#2cff2c";
+
+    function updateColor() {
+      color = getComputedStyle(document.documentElement).getPropertyValue("--ink").trim() || "#2cff2c";
+    }
+
+    function resize() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+
+    function draw(now) {
+      if (!lastFrame || now - lastFrame >= frameIntervalMs) {
+        lastFrame = now;
+        updateColor();
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = color;
+
+        var cols = Math.ceil(canvas.width / pixelSize);
+        var rows = Math.ceil(canvas.height / pixelSize);
+        for (var y = 0; y < rows; y += 1) {
+          for (var x = 0; x < cols; x += 1) {
+            if (Math.random() < density) {
+              ctx.globalAlpha = 0.1 + (Math.random() * 0.55);
+              ctx.fillRect(x * pixelSize, y * pixelSize, pixelSize, pixelSize);
+            }
+          }
+        }
+        ctx.globalAlpha = 1;
+      }
+      window.requestAnimationFrame(draw);
+    }
+
+    resize();
+    window.addEventListener("resize", resize);
+    window.requestAnimationFrame(draw);
+  })();
+</script>
+</div>
+{% endblock %}

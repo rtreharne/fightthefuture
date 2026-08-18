@@ -1,10 +1,60 @@
 from __future__ import annotations
 
+from django.core.validators import EmailValidator
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.utils import timezone
 
 from .constants import FINAL_STAGE, STAGE_COUNT
+
+
+class EventSettings(models.Model):
+    title = models.CharField(max_length=200, default="Fight The Future")
+    event_date = models.CharField(max_length=120, blank=True)
+    event_time = models.CharField(max_length=120, blank=True)
+    location = models.CharField(max_length=200, blank=True)
+    permitted_email_domain = models.CharField(max_length=120, default="liverpool.ac.uk")
+    registration_limit = models.PositiveSmallIntegerField(default=100, validators=[MinValueValidator(1), MaxValueValidator(10000)])
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name_plural = "event settings"
+
+    def __str__(self) -> str:
+        return self.title
+
+    def save(self, *args, **kwargs):
+        self.title = self.title.strip() or "Fight The Future"
+        self.event_date = self.event_date.strip()
+        self.event_time = self.event_time.strip()
+        self.location = self.location.strip()
+        self.permitted_email_domain = self.permitted_email_domain.strip().lower().lstrip("@") or "liverpool.ac.uk"
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def load(cls) -> EventSettings:
+        settings_obj, _created = cls.objects.get_or_create(pk=1)
+        return settings_obj
+
+
+class EventRegistration(models.Model):
+    event_settings = models.ForeignKey(EventSettings, on_delete=models.CASCADE, related_name="registrations")
+    full_name = models.CharField(max_length=200)
+    email = models.EmailField(max_length=254, validators=[EmailValidator()])
+    email_key = models.CharField(max_length=254, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+
+    def __str__(self) -> str:
+        return f"{self.full_name} <{self.email}>"
+
+    def save(self, *args, **kwargs):
+        self.full_name = self.full_name.strip()
+        self.email = self.email.strip()
+        self.email_key = self.email.strip().lower()
+        super().save(*args, **kwargs)
 
 
 class Run(models.Model):

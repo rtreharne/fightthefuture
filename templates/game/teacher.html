@@ -198,6 +198,60 @@
 </div>
 
 <div class="panel">
+  <h3 style="margin-top: 0;">Event Details</h3>
+  <form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="update_event_settings">
+    <label for="event-title">Title</label>
+    <input id="event-title" name="title" type="text" maxlength="200" value="{{ event_settings.title }}" required>
+    <label for="event-date">Date</label>
+    <input id="event-date" name="event_date" type="text" maxlength="120" value="{{ event_settings.event_date }}" placeholder="TBD if blank">
+    <label for="event-time">Time</label>
+    <input id="event-time" name="event_time" type="text" maxlength="120" value="{{ event_settings.event_time }}" placeholder="TBD if blank">
+    <label for="event-location">Location</label>
+    <input id="event-location" name="location" type="text" maxlength="200" value="{{ event_settings.location }}" placeholder="TBD if blank">
+    <label for="permitted-email-domain">Permitted email domain</label>
+    <input id="permitted-email-domain" name="permitted_email_domain" type="text" maxlength="120" value="{{ event_settings.permitted_email_domain }}" required>
+    <label for="registration-limit">Registration limit</label>
+    <input id="registration-limit" name="registration_limit" type="number" min="1" max="10000" value="{{ event_settings.registration_limit }}" required>
+    <button type="submit">Save Event Details</button>
+  </form>
+</div>
+
+<div class="panel">
+  <h3 style="margin-top: 0;">Registrations</h3>
+  <p>Total registrations: <strong>{{ registration_count }}</strong></p>
+  <p>Spaces left: <strong>{{ registration_spaces_left }}</strong></p>
+  <form method="get" action="{% url 'teacher-registrations-csv' %}">
+    <button type="submit" class="alt">Export Registrations CSV</button>
+  </form>
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Registered</th>
+          <th>Full Name</th>
+          <th>Email</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for registration in registrations %}
+          <tr>
+            <td>{{ registration.created_at|date:"Y-m-d H:i:s" }}</td>
+            <td>{{ registration.full_name }}</td>
+            <td>{{ registration.email }}</td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="3">No registrations yet.</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="panel">
   <h3 style="margin-top: 0;">Create Test Set</h3>
   <form method="post">
     {% csrf_token %}

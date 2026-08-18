@@ -1,6 +1,27 @@
 from django.contrib import admin
 
-from .models import Player, PlayerFeedback, PodiumSubmission, Run, StageCode, SubmissionCandidate
+from .models import (
+    EventRegistration,
+    EventSettings,
+    Player,
+    PlayerFeedback,
+    PodiumSubmission,
+    Run,
+    StageCode,
+    SubmissionCandidate,
+)
+
+
+@admin.register(EventSettings)
+class EventSettingsAdmin(admin.ModelAdmin):
+    list_display = ("id", "title", "event_date", "event_time", "location", "permitted_email_domain", "registration_limit", "updated_at")
+
+
+@admin.register(EventRegistration)
+class EventRegistrationAdmin(admin.ModelAdmin):
+    list_display = ("id", "full_name", "email", "event_settings", "created_at")
+    list_filter = ("event_settings", "created_at")
+    search_fields = ("full_name", "email", "email_key")
 
 
 @admin.register(Run)

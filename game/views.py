@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import binascii
+import csv
 from collections import defaultdict
 from datetime import timedelta
 from io import BytesIO, StringIO
@@ -13,13 +14,15 @@ import zlib
 
 from django.conf import settings
 from django.contrib import messages
+from django.core.exceptions import ValidationError
+from django.core.validators import validate_email
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 
 from .constants import FINAL_STAGE, STAGE_COUNT, STAGE_GROUP_SIZES
-from .models import Player, PlayerFeedback, PodiumSubmission, Run, StageCode
+from .models import EventRegistration, EventSettings, Player, PlayerFeedback, PodiumSubmission, Run, StageCode
 from .stage_content import get_stage_content, stage_has_dataset
 from .services import (
     archive_current_run,
@@ -67,6 +70,9 @@ FEEDBACK_OPEN_QUESTIONS = [
     ("best_part", "What was the best part of the session?"),
     ("improve_future", "What one thing would improve the session for future students?"),
 ]
+
+REGISTRATION_SESSION_KEY = "event_registration_form"
+REGISTRATION_SUCCESS_SESSION_KEY = "event_registration_success"
 
 
 def _sync_orientation_step(player: Player) -> None:
@@ -155,8 +161,341 @@ def _update_orientation(player: Player, event: str, value: str) -> None:
         return
 
 
+def _public_base_url(request) -> str:
+    host = request.get_host().split(":", 1)[0].lower()
+    if "onrender.com" in host:
+        return "https://fightthefuture.onrender.com"
+    if "uniwebdev.co.uk" in host:
+        return "https://fightthefuture.uniwebdev.co.uk"
+    return f"{request.scheme}://{request.get_host()}"
+
+
+def _public_join_url(request) -> str:
+    return f"{_public_base_url(request).rstrip('/')}/join"
+
+
+def _event_settings() -> EventSettings:
+    return EventSettings.load()
+
+
+def _pop_registration_form_data(request) -> dict[str, str]:
+    raw = request.session.pop(REGISTRATION_SESSION_KEY, None)
+    if not isinstance(raw, dict):
+        return {"full_name": "", "email": ""}
+    return {
+        "full_name": str(raw.get("full_name", ""))[:200],
+        "email": str(raw.get("email", ""))[:254],
+    }
+
+
+def _stash_registration_form_data(request, full_name: str, email: str) -> None:
+    request.session[REGISTRATION_SESSION_KEY] = {
+        "full_name": full_name[:200],
+        "email": email[:254],
+    }
+
+
+def _registration_domain_label(event_settings: EventSettings) -> str:
+    return f"@{event_settings.permitted_email_domain}"
+
+
+def _registration_count(event_settings: EventSettings) -> int:
+    return event_settings.registrations.count()
+
+
+def _registration_spaces_left(event_settings: EventSettings) -> int:
+    return max(0, event_settings.registration_limit - _registration_count(event_settings))
+
+
+def _registrations_full(event_settings: EventSettings) -> bool:
+    return _registration_spaces_left(event_settings) <= 0
+
+
+def _pop_registration_success(request) -> dict[str, str] | None:
+    raw = request.session.pop(REGISTRATION_SUCCESS_SESSION_KEY, None)
+    if not isinstance(raw, dict):
+        return None
+    full_name = str(raw.get("full_name", "")).strip()[:200]
+    email = str(raw.get("email", "")).strip()[:254]
+    if not full_name or not email:
+        return None
+    return {"full_name": full_name, "email": email}
+
+
 def home(request):
-    return redirect("join")
+    event_settings = _event_settings()
+    return render(
+        request,
+        "game/home.html",
+        {
+            "event_settings": event_settings,
+            "event_date_display": _event_detail(event_settings.event_date),
+            "event_time_display": _event_detail(event_settings.event_time),
+            "event_location_display": _event_detail(event_settings.location),
+            "event_domain_label": _registration_domain_label(event_settings),
+            "registration_limit": event_settings.registration_limit,
+            "registration_spaces_left": _registration_spaces_left(event_settings),
+            "registrations_full": _registrations_full(event_settings),
+            "registration_form_data": _pop_registration_form_data(request),
+            "registration_success": _pop_registration_success(request),
+        },
+    )
+
+
+def register_view(request):
+    if request.method != "POST":
+        return redirect("home")
+
+    event_settings = _event_settings()
+    full_name = request.POST.get("full_name", "").strip()
+    email = request.POST.get("email", "").strip()
+    email_key = email.lower()
+    _stash_registration_form_data(request, full_name, email)
+
+    if not full_name:
+        messages.error(request, "Enter your full name.")
+        return redirect("home")
+    if not email:
+        messages.error(request, "Enter your email address.")
+        return redirect("home")
+
+    try:
+        validate_email(email)
+    except ValidationError:
+        messages.error(request, "Enter a valid email address.")
+        return redirect("home")
+
+    domain = email_key.rsplit("@", 1)[-1] if "@" in email_key else ""
+    if domain != event_settings.permitted_email_domain:
+        messages.error(
+            request,
+            f"Registration is limited to {_registration_domain_label(event_settings)} email addresses.",
+        )
+        return redirect("home")
+
+    if EventRegistration.objects.filter(email_key=email_key).exists():
+        messages.error(request, "That email address is already registered.")
+        return redirect("home")
+
+    if _registrations_full(event_settings):
+        messages.error(request, "Registration is full. No spaces are currently left.")
+        return redirect("home")
+
+    EventRegistration.objects.create(
+        event_settings=event_settings,
+        full_name=full_name,
+        email=email,
+    )
+    request.session.pop(REGISTRATION_SESSION_KEY, None)
+    request.session[REGISTRATION_SUCCESS_SESSION_KEY] = {
+        "full_name": full_name,
+        "email": email,
+    }
+    messages.success(request, "Registration received.")
+    return redirect("home")
+
+
+def teacher_registrations_csv_view(request):
+    if not _teacher_authenticated(request):
+        messages.error(request, "Teacher access required.")
+        return redirect("teacher")
+
+    event_settings = _event_settings()
+    handle = StringIO()
+    writer = csv.writer(handle)
+    writer.writerow(["created_at", "full_name", "email"])
+    for registration in event_settings.registrations.order_by("-created_at", "-id"):
+        writer.writerow(
+            [
+                timezone.localtime(registration.created_at).isoformat(timespec="seconds"),
+                registration.full_name,
+                registration.email,
+            ]
+        )
+
+    response = HttpResponse(handle.getvalue(), content_type="text/csv")
+    response["Content-Disposition"] = 'attachment; filename="event_registrations.csv"'
+    return response
+
+
+def _event_context(request) -> dict[str, object]:
+    event_settings = _event_settings()
+    registration_count = _registration_count(event_settings)
+    return {
+        "event_settings": event_settings,
+        "registration_count": registration_count,
+        "registration_spaces_left": max(0, event_settings.registration_limit - registration_count),
+        "registrations": list(event_settings.registrations.order_by("-created_at", "-id")),
+        "event_domain_label": _registration_domain_label(event_settings),
+    }
+
+
+def _event_detail(value: str) -> str:
+    cleaned = value.strip()
+    return cleaned or "TBD"
+
+
+def _update_event_settings_from_request(request, event_settings: EventSettings) -> None:
+    event_settings.title = request.POST.get("title", "")
+    event_settings.event_date = request.POST.get("event_date", "")
+    event_settings.event_time = request.POST.get("event_time", "")
+    event_settings.location = request.POST.get("location", "")
+    event_settings.permitted_email_domain = request.POST.get("permitted_email_domain", "")
+    event_settings.registration_limit = int(request.POST.get("registration_limit", "100"))
+    event_settings.save()
+
+
+def _render_teacher(request, run):
+    players = []
+    stage_codes = {}
+    if run:
+        players = list(run.players.order_by("id"))
+        for stage_code in StageCode.objects.filter(run=run).order_by("player_id", "stage"):
+            stage_codes.setdefault(stage_code.player_id, {})[stage_code.stage] = stage_code.code
+
+    context = {
+        "authed": _teacher_authenticated(request),
+        "run": run,
+        "players": players,
+        "stage_codes": stage_codes,
+        "stage_group_sizes": STAGE_GROUP_SIZES,
+        "stage_count": STAGE_COUNT,
+        "stage_numbers": range(1, STAGE_COUNT + 1),
+        "collaboration_size_cap": run.collaboration_size_cap if run else None,
+    }
+    context.update(_event_context(request))
+    return render(
+        request,
+        "game/teacher.html",
+        context,
+    )
+
+
+def _teacher_authenticated(request) -> bool:
+    return bool(request.session.get("teacher_authenticated", False))
+
+
+def welcome_view(request):
+    if not _teacher_authenticated(request):
+        messages.error(request, "Teacher access required.")
+        return redirect("teacher")
+    return render(request, "game/welcome.html")
+
+
+def teacher_view(request):
+    if request.method == "POST" and request.POST.get("action") == "teacher_login":
+        passcode = request.POST.get("passcode", "")
+        if passcode == settings.TEACHER_PASSCODE:
+            request.session["teacher_authenticated"] = True
+            messages.success(request, "Teacher access granted.")
+            return redirect("teacher")
+        messages.error(request, "Invalid teacher passcode.")
+
+    if not _teacher_authenticated(request):
+        return _render_teacher(request, run=Run.current())
+
+    run = Run.current()
+
+    if request.method == "POST":
+        action = request.POST.get("action", "")
+
+        try:
+            if action == "start_run":
+                run = start_run()
+                messages.success(request, "Run started.")
+            elif action == "pause_run":
+                run = pause_current_run()
+                messages.success(request, "Run paused.")
+            elif action == "resume_run":
+                run = resume_current_run()
+                messages.success(request, "Run resumed.")
+            elif action == "archive_run":
+                if run:
+                    archive_current_run()
+                    run = None
+                    messages.success(request, "Run archived.")
+                else:
+                    messages.error(request, "No current run to archive.")
+            elif action == "reset_run":
+                run = reset_with_archive()
+                messages.success(request, "Run archived and reset to a fresh run.")
+            elif action == "create_test_users":
+                if not run:
+                    messages.error(request, "No current run. Start one first.")
+                else:
+                    n_users = int(request.POST.get("n_users", "0"))
+                    if n_users < 1:
+                        messages.error(request, "n must be at least 1.")
+                    else:
+                        created = create_test_users(run, n_users)
+                        messages.success(request, f"Created {len(created)} test users.")
+            elif action == "set_collaboration_cap":
+                if not run:
+                    messages.error(request, "No current run.")
+                else:
+                    cap_value = int(request.POST.get("collaboration_size_cap", "0"))
+                    if cap_value < 1 or cap_value > 8:
+                        messages.error(request, "Collaboration cap must be between 1 and 8.")
+                    else:
+                        run.collaboration_size_cap = cap_value
+                        run.save(update_fields=["collaboration_size_cap"])
+                        messages.success(request, f"Collaboration size override set to {cap_value}.")
+            elif action == "clear_collaboration_cap":
+                if not run:
+                    messages.error(request, "No current run.")
+                else:
+                    run.collaboration_size_cap = None
+                    run.save(update_fields=["collaboration_size_cap"])
+                    messages.success(request, "Collaboration size override cleared.")
+            elif action == "suspend_user":
+                if not run:
+                    messages.error(request, "No current run.")
+                else:
+                    username = request.POST.get("username", "").strip()
+                    if not username:
+                        messages.error(request, "Enter a username.")
+                    else:
+                        player = Player.objects.filter(run=run, username_key=username.lower()).first()
+                        if not player:
+                            messages.error(request, f'User "{username}" was not found in the current run.')
+                        elif player.is_suspended:
+                            messages.info(request, f'{player.username} is already suspended.')
+                        else:
+                            player.is_suspended = True
+                            player.save(update_fields=["is_suspended"])
+                            messages.success(request, f"{player.username} has been suspended.")
+            elif action == "reactivate_user":
+                if not run:
+                    messages.error(request, "No current run.")
+                else:
+                    username = request.POST.get("username", "").strip()
+                    if not username:
+                        messages.error(request, "Enter a username.")
+                    else:
+                        player = Player.objects.filter(run=run, username_key=username.lower()).first()
+                        if not player:
+                            messages.error(request, f'User "{username}" was not found in the current run.')
+                        elif not player.is_suspended:
+                            messages.info(request, f"{player.username} is already active.")
+                        else:
+                            player.is_suspended = False
+                            player.save(update_fields=["is_suspended"])
+                            messages.success(request, f"{player.username} has been reactivated.")
+            elif action == "update_event_settings":
+                event_settings = _event_settings()
+                _update_event_settings_from_request(request, event_settings)
+                messages.success(request, "Event details updated.")
+            elif action == "logout_teacher":
+                request.session["teacher_authenticated"] = False
+                return redirect("teacher")
+        except Exception as exc:  # noqa: BLE001
+            messages.error(request, f"Teacher action failed: {exc}")
+
+        # Post/Redirect/Get: avoid form re-submission prompts during auto-polling refreshes.
+        return redirect("teacher")
+
+    run = Run.current()
+    return _render_teacher(request, run=run)
 
 
 def join_view(request):
@@ -1302,13 +1641,7 @@ def podium_view(request):
     run = Run.current()
     latest_submission = None
     matches = []
-    host = request.get_host().split(":", 1)[0].lower()
-    if "onrender.com" in host:
-        podium_join_url = "https://fightthefuture.onrender.com"
-    elif "uniwebdev.co.uk" in host:
-        podium_join_url = "https://fightthefuture.uniwebdev.co.uk"
-    else:
-        podium_join_url = f"{request.scheme}://{request.get_host()}"
+    podium_join_url = _public_join_url(request)
 
     pending_submission = None
     show_finale_celebration = False
@@ -1408,150 +1741,3 @@ def podium_view(request):
             "podium_join_url": podium_join_url,
         },
     )
-
-
-def _teacher_authenticated(request) -> bool:
-    return bool(request.session.get("teacher_authenticated", False))
-
-
-def welcome_view(request):
-    if not _teacher_authenticated(request):
-        messages.error(request, "Teacher access required.")
-        return redirect("teacher")
-    return render(request, "game/welcome.html")
-
-
-def _render_teacher(request, run):
-    players = []
-    stage_codes = {}
-    if run:
-        players = list(run.players.order_by("id"))
-        for stage_code in StageCode.objects.filter(run=run).order_by("player_id", "stage"):
-            stage_codes.setdefault(stage_code.player_id, {})[stage_code.stage] = stage_code.code
-
-    return render(
-        request,
-        "game/teacher.html",
-        {
-            "authed": _teacher_authenticated(request),
-            "run": run,
-            "players": players,
-            "stage_codes": stage_codes,
-            "stage_group_sizes": STAGE_GROUP_SIZES,
-            "stage_count": STAGE_COUNT,
-            "stage_numbers": range(1, STAGE_COUNT + 1),
-            "collaboration_size_cap": run.collaboration_size_cap if run else None,
-        },
-    )
-
-
-def teacher_view(request):
-    if request.method == "POST" and request.POST.get("action") == "teacher_login":
-        passcode = request.POST.get("passcode", "")
-        if passcode == settings.TEACHER_PASSCODE:
-            request.session["teacher_authenticated"] = True
-            messages.success(request, "Teacher access granted.")
-            return redirect("teacher")
-        messages.error(request, "Invalid teacher passcode.")
-
-    if not _teacher_authenticated(request):
-        return _render_teacher(request, run=Run.current())
-
-    run = Run.current()
-
-    if request.method == "POST":
-        action = request.POST.get("action", "")
-
-        try:
-            if action == "start_run":
-                run = start_run()
-                messages.success(request, "Run started.")
-            elif action == "pause_run":
-                run = pause_current_run()
-                messages.success(request, "Run paused.")
-            elif action == "resume_run":
-                run = resume_current_run()
-                messages.success(request, "Run resumed.")
-            elif action == "archive_run":
-                if run:
-                    archive_current_run()
-                    run = None
-                    messages.success(request, "Run archived.")
-                else:
-                    messages.error(request, "No current run to archive.")
-            elif action == "reset_run":
-                run = reset_with_archive()
-                messages.success(request, "Run archived and reset to a fresh run.")
-            elif action == "create_test_users":
-                if not run:
-                    messages.error(request, "No current run. Start one first.")
-                else:
-                    n_users = int(request.POST.get("n_users", "0"))
-                    if n_users < 1:
-                        messages.error(request, "n must be at least 1.")
-                    else:
-                        created = create_test_users(run, n_users)
-                        messages.success(request, f"Created {len(created)} test users.")
-            elif action == "set_collaboration_cap":
-                if not run:
-                    messages.error(request, "No current run.")
-                else:
-                    cap_value = int(request.POST.get("collaboration_size_cap", "0"))
-                    if cap_value < 1 or cap_value > 8:
-                        messages.error(request, "Collaboration cap must be between 1 and 8.")
-                    else:
-                        run.collaboration_size_cap = cap_value
-                        run.save(update_fields=["collaboration_size_cap"])
-                        messages.success(request, f"Collaboration size override set to {cap_value}.")
-            elif action == "clear_collaboration_cap":
-                if not run:
-                    messages.error(request, "No current run.")
-                else:
-                    run.collaboration_size_cap = None
-                    run.save(update_fields=["collaboration_size_cap"])
-                    messages.success(request, "Collaboration size override cleared.")
-            elif action == "suspend_user":
-                if not run:
-                    messages.error(request, "No current run.")
-                else:
-                    username = request.POST.get("username", "").strip()
-                    if not username:
-                        messages.error(request, "Enter a username.")
-                    else:
-                        player = Player.objects.filter(run=run, username_key=username.lower()).first()
-                        if not player:
-                            messages.error(request, f'User "{username}" was not found in the current run.')
-                        elif player.is_suspended:
-                            messages.info(request, f'{player.username} is already suspended.')
-                        else:
-                            player.is_suspended = True
-                            player.save(update_fields=["is_suspended"])
-                            messages.success(request, f"{player.username} has been suspended.")
-            elif action == "reactivate_user":
-                if not run:
-                    messages.error(request, "No current run.")
-                else:
-                    username = request.POST.get("username", "").strip()
-                    if not username:
-                        messages.error(request, "Enter a username.")
-                    else:
-                        player = Player.objects.filter(run=run, username_key=username.lower()).first()
-                        if not player:
-                            messages.error(request, f'User "{username}" was not found in the current run.')
-                        elif not player.is_suspended:
-                            messages.info(request, f"{player.username} is already active.")
-                        else:
-                            player.is_suspended = False
-                            player.save(update_fields=["is_suspended"])
-                            messages.success(request, f"{player.username} has been reactivated.")
-            elif action == "logout_teacher":
-                request.session["teacher_authenticated"] = False
-                return redirect("teacher")
-        except Exception as exc:  # noqa: BLE001
-            messages.error(request, f"Teacher action failed: {exc}")
-
-        # Post/Redirect/Get: avoid form re-submission prompts during auto-polling refreshes.
-        return redirect("teacher")
-
-    run = Run.current()
-    return _render_teacher(request, run=run)

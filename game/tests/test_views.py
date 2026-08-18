@@ -10,11 +10,30 @@ from django.test import TestCase
 from django.utils import timezone
 
 from game.constants import FINAL_STAGE
-from game.models import Player, PlayerFeedback, Run, StageCode
+from game.models import EventRegistration, EventSettings, Player, PlayerFeedback, Run, StageCode
 from game.services import create_player, pause_current_run, start_run
 
 
 class JoinFlowTests(TestCase):
+    def test_home_page_shows_minimal_event_details_and_tbd_defaults(self):
+        response = self.client.get("/")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Fight The Future")
+        self.assertContains(response, "AUGUR")
+        self.assertContains(response, "Python")
+        self.assertContains(response, "ANY coding language")
+        self.assertContains(response, "agent-based AI")
+        self.assertContains(response, 'id="pixel-flicker"')
+        self.assertContains(response, "Date:")
+        self.assertContains(response, "Time:")
+        self.assertContains(response, "Location:")
+        self.assertContains(response, "TBD")
+        self.assertContains(response, "Register for Event")
+        self.assertContains(response, "Spaces left:")
+        self.assertContains(response, "100")
+        self.assertNotContains(response, "Download Poster SVG")
+        self.assertNotContains(response, "Current run")
+
     def test_join_existing_username_redirects_to_existing_play_endpoint(self):
         Run.objects.create(name="run_join", status=Run.Status.ACTIVE, is_current=True)
 
@@ -52,6 +71,83 @@ class JoinFlowTests(TestCase):
         response = self.client.get(f"/play/{player.id}")
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response["Location"], "/join")
+
+    def test_valid_registration_accepts_liverpool_email(self):
+        response = self.client.post(
+            "/register",
+            {"full_name": "Ada Lovelace", "email": "ada@liverpool.ac.uk"},
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Registration received.")
+        self.assertContains(response, "Registration Confirmed")
+        self.assertContains(response, "Ada Lovelace")
+        self.assertContains(response, "ada@liverpool.ac.uk")
+        self.assertContains(response, "Spaces left:")
+        self.assertContains(response, "99")
+        self.assertEqual(EventRegistration.objects.count(), 1)
+        registration = EventRegistration.objects.get()
+        self.assertEqual(registration.full_name, "Ada Lovelace")
+        self.assertEqual(registration.email, "ada@liverpool.ac.uk")
+        self.assertEqual(registration.email_key, "ada@liverpool.ac.uk")
+
+    def test_registration_rejects_invalid_email(self):
+        response = self.client.post(
+            "/register",
+            {"full_name": "Ada Lovelace", "email": "not-an-email"},
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Enter a valid email address.")
+        self.assertEqual(EventRegistration.objects.count(), 0)
+
+    def test_registration_rejects_wrong_domain(self):
+        response = self.client.post(
+            "/register",
+            {"full_name": "Ada Lovelace", "email": "ada@example.com"},
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Registration is limited to")
+        self.assertContains(response, "@liverpool.ac.uk")
+        self.assertEqual(EventRegistration.objects.count(), 0)
+
+    def test_registration_rejects_duplicate_normalized_email(self):
+        event_settings = EventSettings.load()
+        EventRegistration.objects.create(
+            event_settings=event_settings,
+            full_name="Ada Lovelace",
+            email="ada@liverpool.ac.uk",
+        )
+
+        response = self.client.post(
+            "/register",
+            {"full_name": "Ada L.", "email": "ADA@LIVERPOOL.AC.UK"},
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "already registered")
+        self.assertEqual(EventRegistration.objects.count(), 1)
+
+    def test_registration_rejects_when_limit_is_reached(self):
+        event_settings = EventSettings.load()
+        event_settings.registration_limit = 1
+        event_settings.save(update_fields=["registration_limit", "updated_at"])
+        EventRegistration.objects.create(
+            event_settings=event_settings,
+            full_name="First Person",
+            email="first@liverpool.ac.uk",
+        )
+
+        response = self.client.post(
+            "/register",
+            {"full_name": "Ada Lovelace", "email": "ada@liverpool.ac.uk"},
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Registration is currently full.")
+        self.assertContains(response, "No spaces are currently left.")
+        self.assertEqual(EventRegistration.objects.count(), 1)
 
 
 class PodiumProgressionTests(TestCase):
@@ -112,6 +208,7 @@ class PodiumProgressionTests(TestCase):
         self.assertContains(response, "Rejected")
         self.assertContains(response, "Stage 1")
         self.assertContains(response, "p1")
+        self.assertContains(response, "testserver/join")
         self.assertNotContains(response, "Submission #")
         self.assertIsNotNone(re.search(r"\[\d{2}:\d{2}:\d{2}\]\s+code=", response.content.decode()))
 
@@ -261,6 +358,69 @@ class TeacherDashboardTests(TestCase):
         self.assertEqual(welcome.status_code, 200)
         self.assertContains(welcome, "Welcome to Fight The Future.")
         self.assertContains(welcome, "Back to Facilitator Dashboard")
+
+    def test_teacher_can_update_event_settings_and_landing_reflects_changes(self):
+        self._teacher_login()
+        response = self.client.post(
+            "/teacher",
+            {
+                "action": "update_event_settings",
+                "title": "Fight The Future Autumn Session",
+                "event_date": "September 10, 2026",
+                "event_time": "14:00",
+                "location": "Central Teaching Hub",
+                "permitted_email_domain": "@liverpool.ac.uk",
+                "registration_limit": "80",
+            },
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Event details updated.")
+
+        event_settings = EventSettings.load()
+        self.assertEqual(event_settings.title, "Fight The Future Autumn Session")
+        self.assertEqual(event_settings.event_date, "September 10, 2026")
+        self.assertEqual(event_settings.event_time, "14:00")
+        self.assertEqual(event_settings.location, "Central Teaching Hub")
+        self.assertEqual(event_settings.permitted_email_domain, "liverpool.ac.uk")
+        self.assertEqual(event_settings.registration_limit, 80)
+
+        landing = self.client.get("/")
+        self.assertContains(landing, "Fight The Future Autumn Session")
+        self.assertContains(landing, "September 10, 2026")
+        self.assertContains(landing, "14:00")
+        self.assertContains(landing, "Central Teaching Hub")
+        self.assertContains(landing, "80")
+
+    def test_teacher_dashboard_shows_registrations_and_csv_export(self):
+        event_settings = EventSettings.load()
+        EventRegistration.objects.create(
+            event_settings=event_settings,
+            full_name="Grace Hopper",
+            email="grace@liverpool.ac.uk",
+        )
+        self._teacher_login()
+
+        dashboard = self.client.get("/teacher")
+        self.assertEqual(dashboard.status_code, 200)
+        self.assertContains(dashboard, "Registrations")
+        self.assertContains(dashboard, "Grace Hopper")
+        self.assertContains(dashboard, "grace@liverpool.ac.uk")
+        self.assertContains(dashboard, "Export Registrations CSV")
+        self.assertContains(dashboard, "Spaces left:")
+
+        export = self.client.get("/teacher/registrations.csv")
+        self.assertEqual(export.status_code, 200)
+        self.assertEqual(export["Content-Disposition"], 'attachment; filename="event_registrations.csv"')
+        rows = list(csv.reader(StringIO(export.content.decode())))
+        self.assertEqual(rows[0], ["created_at", "full_name", "email"])
+        self.assertEqual(rows[1][1:], ["Grace Hopper", "grace@liverpool.ac.uk"])
+
+    def test_teacher_registration_export_requires_authentication(self):
+        response = self.client.get("/teacher/registrations.csv", follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Teacher Access")
+        self.assertContains(response, "Teacher access required.")
 
 
 class OrientationWalkthroughTests(TestCase):
