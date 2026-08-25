@@ -1,0 +1,8 @@
+#!/bin/sh
+# Project-local TinyTeX launcher for terminal and VS Code builds.
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+tex_bin="$script_dir/../tinytex/bin/x86_64-linux"
+export PATH="$tex_bin:$PATH"
+exec "$tex_bin/latexmk" "$@"
