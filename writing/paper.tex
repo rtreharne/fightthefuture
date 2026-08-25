@@ -6,14 +6,19 @@
 \usepackage[utf8]{inputenc}
 \usepackage{lmodern}
 \usepackage{microtype}
+\usepackage{lineno}
 \usepackage[hidelinks]{hyperref}
 \usepackage[nameinlink,noabbrev]{cleveref}
+\usepackage[round,authoryear]{natbib}
 
 \title{Fight The Future: A Design Case for Collaborative, Agentic-AI-Supported Coding in Higher Education}
-\author{Author One \and Author Two}
+\author{Robert Treharne \and Jack Foster}
 \date{\today}
 
 \begin{document}
+
+\linespread{1.667}\selectfont
+\linenumbers
 
 \maketitle
 
@@ -29,10 +34,80 @@ maintaining human judgement, verification, and accountability.
 
 \section{Introduction: Coding Education after the Arrival of Agents}
 
-% Establish the professional and educational problem, the central argument,
-% and this article's contribution to learning development.
+Programming education once centred on a familiar scene: a student, a problem,
+and an empty editor. The scene has changed. Large language models can now
+generate and interpret source code from natural-language instructions, bringing
+code-generating agents into the ordinary programming workflow
+\citep{prather2023robots}. Within a few exchanges, an agent may propose a
+program, explain an error, or reshape a partial solution. Programming has not
+disappeared, but its centre of gravity has moved. Students must still formulate
+problems, decide which context matters, inspect suggestions, run tests, and
+accept responsibility for the result.
+
+That responsibility cannot be assumed. In a study of a code-generation tool,
+participants valued the useful starting point it provided but encountered
+difficulties understanding, editing, and debugging generated code
+\citep{vaithilingam2022expectation}. Barke, James, and Polikarpova
+\citeyearpar{barke2023grounded} similarly distinguish between using an agent
+to accelerate a known next step and using it to explore an uncertain problem.
+For a novice, the difference matters: fluent-looking code can close down
+deliberation before it has begun. Computing educators therefore face questions
+about learning goals, assessment, academic integrity, and the place of AI in
+introductory programming \citep{becker2023programming}. A human-centred
+educational response must preserve learner agency and accountability rather
+than treat tool access as an educational intervention in itself
+\citep{unesco2023guidance}.
+
+This article presents \emph{Fight The Future}, a live, narrative-driven coding
+event for University of Liverpool students and staff. It is a scholarly design
+case, not an evaluation of learning outcomes. The case examines how a short,
+completable event can introduce Python, Visual Studio Code, and agent-based AI
+while making human judgement necessary. Its central argument is that access to
+a coding agent does not, by itself, create meaningful learning. Individualised
+data, deterministic validation, time pressure, narrative progression, and
+engineered interdependence can instead require participants to specify,
+verify, and collaborate. The sections that follow develop four transferable
+design principles: bounded immersion, designed finishability, engineered
+interdependence, and human accountability.
 
 \section{Context and Rationale}
+
+Fight The Future began with a teaching problem that predates generative AI. For
+almost a decade, the first author (R.T.) has taught introductory coding and
+statistics to first-year bioscience students. It can be a thankless task. Some
+students arrive able to adapt a script; for others, a command line or a missing
+bracket is their first encounter with code. A cohort with such varied prior
+experience makes inclusive teaching difficult. It is not reasonable to assume
+confidence, a shared technical vocabulary, or access to experienced peers.
+
+Generative AI makes an old curricular question more urgent. Do bioscience
+undergraduates need to write R syntax when an agent can often produce working
+code and their primary interest lies in what data can reveal? The argument here
+is not for removing R from their education. An R script provides an inspectable,
+modifiable, and reproducible account of an analysis. Students need enough
+familiarity with it to read what it does, identify where it may be wrong, and
+ask for a change. However, recalling commands should not displace the more
+important work of framing a scientific question, describing data accurately,
+selecting an appropriate method, and interpreting the result.
+
+Bien and Mukherjee \citeyearpar{bien2025generative} describe an English-to-R
+workflow for non-specialist business students that sits between point-and-click
+software and extensive syntax instruction. Their setting differs from
+bioscience, but the approach helps to define a plausible middle ground. Schwarz
+\citeyearpar{schwarz2025generative} found that generative AI could produce code
+for statistical analyses while failing to follow standard procedures
+consistently. Statistical knowledge and human oversight therefore remained
+essential. Students need to audit an agent's work: inspect variables, units,
+missing values, and transformations; check that the code answers the stated
+question; test assumptions and visualisations; and judge whether the conclusion
+makes sense in biological context.
+
+The immediate objective of \emph{Fight The Future} was to give novice
+participants a short, collaborative experience of that audit process. It was
+not designed to establish that the event improved their learning. The objective
+of this design case is to explain how the event's narrative, individualised
+data, deterministic validation, and collaborative dependencies were intended to
+make specification, verification, and accountability necessary.
 
 \section{Fight The Future}
 
@@ -58,8 +133,8 @@ maintaining human judgement, verification, and accountability.
 
 \section{Conclusion}
 
-% Add a bibliography once sources have been selected.
-% \bibliographystyle{plain}
-% \bibliography{references}
+% Sources are maintained in references.bib and cited with \citet{} or \citep{}.
+\bibliographystyle{apalike}
+\bibliography{references}
 
 \end{document}

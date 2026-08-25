@@ -23,6 +23,35 @@ Build files and the generated PDF are ignored by Git.
 - **Maximum length:** 5,000 words, including title, abstract, keywords and references
 - **Approach:** A scholarly design case and critical practitioner reflection, not an empirical evaluation
 
+## Recommended word budget
+
+Aim for **3,200--3,500 words before the reference list**, including the title,
+abstract, keywords, headings and main text. This is a deliberately concise
+design case rather than a full empirical study. It leaves generous space for a
+selective reference list, citations that expand during revision, and minor
+editorial additions while remaining comfortably below the 5,000-word maximum.
+
+Use the following provisional allocation for the written article (about 3,225
+words in total):
+
+| Section | Target words |
+| --- | ---: |
+| Title, abstract and keywords | 175 |
+| Introduction | 250 |
+| Context and rationale | 200 |
+| Fight The Future | 300 |
+| Design requirements and principles | 850 |
+| Implementation of the live event | 250 |
+| Critical practitioner reflection | 400 |
+| Why universities must teach agent-based development | 350 |
+| Transferable recommendations | 200 |
+| Limitations and future evaluation | 150 |
+| Conclusion | 100 |
+
+The four design principles remain the article's main contribution, so protect
+their allocation. Keep the event description factual and compact; use it only
+to make the design choices and the subsequent reflection intelligible.
+
 ## Purpose
 
 The article will describe the design and implementation of **Fight The Future**, a live, narrative-driven coding event for University of Liverpool students and staff. It will examine how a short, completable and necessarily collaborative experience can introduce novice participants to Python, VS Code and agent-based AI while preserving human reasoning, verification and accountability.

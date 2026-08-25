@@ -1,0 +1,38 @@
+\begin{thebibliography}{}
+
+\bibitem[Barke et~al., 2023]{barke2023grounded}
+Barke, S., James, M.~B., and Polikarpova, N. (2023).
+\newblock Grounded {C}opilot: How programmers interact with code-generating models.
+\newblock In {\em Proceedings of the ACM on Programming Languages}, volume 7 (OOPSLA1), pages 85--111.
+
+\bibitem[Becker et~al., 2023]{becker2023programming}
+Becker, B.~A., Denny, P., Finnie-Ansley, J., Luxton-Reilly, A., Prather, J., and Santos, E.~A. (2023).
+\newblock Programming is hard - or at least it used to be: Educational opportunities and challenges of {AI} code generation.
+\newblock In {\em Proceedings of the 54th ACM Technical Symposium on Computer Science Education V. 1}, pages 500--506. Association for Computing Machinery.
+
+\bibitem[Bien and Mukherjee, 2025]{bien2025generative}
+Bien, J. and Mukherjee, G. (2025).
+\newblock Generative {AI} for data science 101: Coding without learning to code.
+\newblock {\em Journal of Statistics and Data Science Education}, 33(2):129--142.
+
+\bibitem[Prather et~al., 2023]{prather2023robots}
+Prather, J., Denny, P., Leinonen, J., Becker, B.~A., Albluwi, I., Craig, M., Keuning, H., Kiesler, N., Kohn, T., Luxton-Reilly, A., MacNeil, S., Petersen, A., Pettit, R., Reeves, B.~N., and Savelka, J. (2023).
+\newblock The robots are here: Navigating the generative {AI} revolution in computing education.
+\newblock In {\em Proceedings of the 2023 Working Group Reports on Innovation and Technology in Computer Science Education}, pages 108--159. Association for Computing Machinery.
+
+\bibitem[Schwarz, 2025]{schwarz2025generative}
+Schwarz, J. (2025).
+\newblock The use of generative {AI} in statistical data analysis and its impact on teaching statistics at universities of applied sciences.
+\newblock {\em Teaching Statistics}, 47(2):118--128.
+
+\bibitem[{UNESCO}, 2023]{unesco2023guidance}
+{UNESCO} (2023).
+\newblock {\em Guidance for Generative {AI} in Education and Research}.
+\newblock UNESCO, Paris.
+
+\bibitem[Vaithilingam et~al., 2022]{vaithilingam2022expectation}
+Vaithilingam, P., Zhang, T., and Glassman, E. (2022).
+\newblock Expectation vs.\ experience: Evaluating the usability of code generation tools powered by large language models.
+\newblock In {\em CHI Conference on Human Factors in Computing Systems Extended Abstracts}, pages 1--7. Association for Computing Machinery.
+
+\end{thebibliography}
