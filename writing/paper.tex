@@ -7,133 +7,305 @@
 \usepackage{lmodern}
 \usepackage{microtype}
 \usepackage{lineno}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{listings}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,backgrounds,fit,positioning}
 \usepackage[hidelinks]{hyperref}
 \usepackage[nameinlink,noabbrev]{cleveref}
 \usepackage[round,authoryear]{natbib}
 
-\title{Fight The Future: A Design Case for Collaborative, Agentic-AI-Supported Coding in Higher Education}
-\author{Robert Treharne \and Jack Foster}
-\date{\today}
+\definecolor{augurnavy}{HTML}{17324D}
+\definecolor{signalteal}{HTML}{167C80}
+\definecolor{warninggold}{HTML}{D99025}
+\definecolor{paperblue}{HTML}{EAF3F5}
+\definecolor{papergold}{HTML}{FFF3D8}
+\definecolor{inkgrey}{HTML}{33434D}
+
+\lstdefinestyle{artifact}{
+  language=Python,
+  basicstyle=\ttfamily\small,
+  keywordstyle=\color{augurnavy}\bfseries,
+  stringstyle=\color{signalteal},
+  commentstyle=\color{inkgrey},
+  frame=single,
+  rulecolor=\color{signalteal},
+  backgroundcolor=\color{paperblue},
+  breaklines=true,
+  showstringspaces=false,
+  columns=fullflexible
+}
+
+\title{Designing \emph{Fight The Future}: A Narrative, Agent-Supported Collaborative Coding Event}
+\author{Anonymous for review}
+\date{}
 
 \begin{document}
 
-\linespread{1.667}\selectfont
+\linespread{1.5}\selectfont
 \linenumbers
-
 \maketitle
 
 \begin{abstract}
-This paper presents a scholarly design case of \emph{Fight The Future}, a live,
-narrative-driven coding event for University of Liverpool students and staff.
-It considers how a short, deliberately collaborative experience can introduce
-novice participants to Python, Visual Studio Code, and agent-based AI while
-maintaining human judgement, verification, and accountability.
+This design case describes \emph{Fight The Future}, a two-hour, browser-supported coding event developed for a voluntary audience of University of Liverpool students and staff. Participants entered a fictional crisis in which an automated city-management system had become hostile. Across four stages they used GitHub Copilot in Visual Studio Code, personal datasets, and executable R, Python, or JavaScript code to recover six-digit access codes. The central design problem was not how to make an agent produce code. It was how to prevent rapid individual completion from making peers irrelevant. The resulting design separated personal checking from collective progression. Every participant received a different valid code, while a shared podium advanced only stage-aligned groups whose codes summed to a valid total. Required group sizes increased from one to two, four, and eight. This case examines the completed experience through its learning sequence, application architecture, generated materials, and practitioner reflection. It analyses five consequential decisions: treating technical orientation as part of the experience, personalising data, separating checking from progression, escalating collaboration, and building exceptions for a live room. The account also identifies unresolved tensions around coercion, accessibility, verification, voluntary attendance, and missing evaluation evidence. The case offers the podium mechanism as situated design precedent rather than evidence that the event improved learning.
 \end{abstract}
 
-\noindent\textbf{Keywords:} agentic AI; programming education; collaboration; higher education; design case
+\noindent\textbf{Keywords:} design case, generative AI, programming education, collaborative learning, educational game
 
-\section{Introduction: Coding Education after the Arrival of Agents}
+\section{The Design Context}
 
-Programming education once centred on a familiar scene: a student, a problem,
-and an empty editor. The scene has changed. Large language models can now
-generate and interpret source code from natural-language instructions, bringing
-code-generating agents into the ordinary programming workflow
-\citep{prather2023robots}. Within a few exchanges, an agent may propose a
-program, explain an error, or reshape a partial solution. Programming has not
-disappeared, but its centre of gravity has moved. Students must still formulate
-problems, decide which context matters, inspect suggestions, run tests, and
-accept responsibility for the result.
+For almost a decade, the lead designer has taught introductory R coding and statistics to first-year bioscience students. Some arrive able to adapt a script to a new dataset. For others, their first encounter with code is entering \texttt{print("Hello World)} in RStudio, discovering that the missing quotation mark prevents it from running, and wondering why they have been asked to make a computer repeat a pointless phrase. That encounter combines a syntax error with a failure of purpose. The student has neither a working result nor a reason to value it.
 
-That responsibility cannot be assumed. In a study of a code-generation tool,
-participants valued the useful starting point it provided but encountered
-difficulties understanding, editing, and debugging generated code
-\citep{vaithilingam2022expectation}. Barke, James, and Polikarpova
-\citeyearpar{barke2023grounded} similarly distinguish between using an agent
-to accelerate a known next step and using it to explore an uncertain problem.
-For a novice, the difference matters: fluent-looking code can close down
-deliberation before it has begun. Computing educators therefore face questions
-about learning goals, assessment, academic integrity, and the place of AI in
-introductory programming \citep{becker2023programming}. A human-centred
-educational response must preserve learner agency and accountability rather
-than treat tool access as an educational intervention in itself
-\citep{unesco2023guidance}.
+Generative coding tools alter this encounter without resolving it. A student can now describe a desired result in ordinary language and receive a plausible script within seconds. The blank editor becomes less intimidating, but new problems appear. The student must describe the data accurately, recognise whether the proposed method fits the question, inspect what the agent changed, execute the code, diagnose failure, and decide whether an apparently successful output is credible. Studies of code-generation tools report the value of a useful starting point alongside difficulty understanding, editing, and debugging generated code \citep{vaithilingam2022expectation}. The distinction between accelerating a known step and exploring an uncertain task is particularly important for novices, who may not know what a reasonable solution should contain \citep{barke2023grounded}.
 
-This article presents \emph{Fight The Future}, a live, narrative-driven coding
-event for University of Liverpool students and staff. It is a scholarly design
-case, not an evaluation of learning outcomes. The case examines how a short,
-completable event can introduce Python, Visual Studio Code, and agent-based AI
-while making human judgement necessary. Its central argument is that access to
-a coding agent does not, by itself, create meaningful learning. Individualised
-data, deterministic validation, time pressure, narrative progression, and
-engineered interdependence can instead require participants to specify,
-verify, and collaborate. The sections that follow develop four transferable
-design principles: bounded immersion, designed finishability, engineered
-interdependence, and human accountability.
+This tension was visible in bioscience teaching. R remains valuable because a script is an inspectable and reproducible account of an analysis. Yet memorising syntax is not the same as learning to formulate a biological question, identify variables and units, select an analysis, or interpret uncertainty. Work on English-to-R workflows suggests a possible middle ground for non-specialists \citep{bien2025generative}, while evidence that generated statistical code can fail to follow standard procedures reinforces the need for disciplinary judgement \citep{schwarz2025generative}. The design brief for \emph{Fight The Future} therefore began with a practical question: could a short event let participants use a coding agent from the outset while making execution, checking, and human coordination unavoidable?
 
-\section{Context and Rationale}
+The event was not intended to replace an introductory module. It was an extra-curricular experiment advertised to University of Liverpool staff and students as a live, collaborative coding challenge. Attendees chose to be there and were warned that talking to other people was a condition of participation. This opt-in context gave the design permission to be theatrical, time-pressured, and socially demanding. It also limits what can be inferred about using the same mechanics with a captive module audience.
 
-Fight The Future began with a teaching problem that predates generative AI. For
-almost a decade, the first author (R.T.) has taught introductory coding and
-statistics to first-year bioscience students. It can be a thankless task. Some
-students arrive able to adapt a script; for others, a command line or a missing
-bracket is their first encounter with code. A cohort with such varied prior
-experience makes inclusive teaching difficult. It is not reasonable to assume
-confidence, a shared technical vocabulary, or access to experienced peers.
+\section{Position of the Case and Sources of Evidence}
 
-Generative AI makes an old curricular question more urgent. Do bioscience
-undergraduates need to write R syntax when an agent can often produce working
-code and their primary interest lies in what data can reveal? The argument here
-is not for removing R from their education. An R script provides an inspectable,
-modifiable, and reproducible account of an analysis. Students need enough
-familiarity with it to read what it does, identify where it may be wrong, and
-ask for a change. However, recalling commands should not displace the more
-important work of framing a scientific question, describing data accurately,
-selecting an appropriate method, and interpreting the result.
+This article reports a design, not a study of participants. A design case communicates situated knowledge about how an artifact or experience came to take its form \citep{boling2010need}. Its usefulness lies in the detail available to other designers, including decisions that were contingent, uncomfortable, or unsuccessful. Accordingly, this account does not claim that \emph{Fight The Future} improved coding ability, AI literacy, confidence, or collaboration. It describes what the system required participants to do and reflects on what those requirements may have enabled or obstructed.
 
-Bien and Mukherjee \citeyearpar{bien2025generative} describe an English-to-R
-workflow for non-specialist business students that sits between point-and-click
-software and extensive syntax instruction. Their setting differs from
-bioscience, but the approach helps to define a plausible middle ground. Schwarz
-\citeyearpar{schwarz2025generative} found that generative AI could produce code
-for statistical analyses while failing to follow standard procedures
-consistently. Statistical knowledge and human oversight therefore remained
-essential. Students need to audit an agent's work: inspect variables, units,
-missing values, and transformations; check that the code answers the stated
-question; test assumptions and visualisations; and judge whether the conclusion
-makes sense in biological context.
+The lead designer conceived the event, developed the learning sequence and web application, generated the datasets, and facilitated its delivery. This proximity provides access to design reasoning but also creates a partial account. The case draws on the final activity design, application behaviour, stage instructions, solution scripts, offline contingency materials, and practitioner recollection. No participant submissions, feedback records, or identifiable logs were analysed for this article. Exact attendance, stage timings, intervention counts, room layout, and completion rates were not preserved in a form suitable for reporting. Their absence is treated as a limitation rather than repaired through retrospective estimates.
 
-The immediate objective of \emph{Fight The Future} was to give novice
-participants a short, collaborative experience of that audit process. It was
-not designed to establish that the event improved their learning. The objective
-of this design case is to explain how the event's narrative, individualised
-data, deterministic validation, and collaborative dependencies were intended to
-make specification, verification, and accountability necessary.
+The account concentrates on the final design and the reasoning that shaped its main mechanisms. Some explanations reflect the lead designer's interpretation after delivery rather than evidence recorded during the event. Those interpretations are presented as practitioner reflection. Synthetic examples in this article come from the generated contingency pack and are not participant outcomes.
 
-\section{Fight The Future}
+\section{Brief, Constraints, and Design Process}
 
-\section{Design Requirements and Principles}
+\subsection{A short event for unequal starting points}
 
-\subsection{Bounded Immersion}
+The operational target was a complete experience within two hours. Participants could use their own computers or university machines. They could begin in R, Python, or JavaScript, although later tasks increasingly directed them towards Python or R because the supplied datasets, statistical analyses, and helper scripts had to remain supportable in a live room. The intended audience included people with little coding experience and people capable of completing early tasks rapidly. No common software state, command-line fluency, or technical vocabulary could be assumed.
 
-\subsection{Designed Finishability}
+The social objective followed from that variation. Faster participants were not to be given additional private exercises while others caught up. Their progress would instead become dependent on helping peers reach the same stage. This was a design objective, not a claim that peer teaching occurred. The problem was to create consequential contact between participants without assigning fixed ability labels or allowing one person's incorrect answer to corrupt an entire group.
 
-\subsection{Engineered Interdependence}
+Three constraints shaped the design. First, agent output had to become executable work rather than a chat demonstration. Participants would create files, download data, run commands, and inspect outputs in Visual Studio Code. Second, the event needed a stable completion condition. Open-ended projects were unsuitable for a two-hour narrative with a promised ending. Third, collaboration had to affect progression. Merely recommending group work would allow experienced participants to complete the activity alone.
 
-\subsection{Human Accountability}
+\subsection{Designing for the conditions of a live room}
 
-\section{Implementation of the Live Event}
+The coding challenges could only function if participants first reached a usable technical state. A person unable to open the correct folder, run a language from the terminal, access the coding agent, or locate a downloaded file could not engage with the intended analytical problem. Setup therefore became part of the designed experience rather than an informal task left to whoever arrived early.
 
-\section{Critical Practitioner Reflection}
+The five-step orientation asked whether participants were using their own or a university device, recorded operating system and preferred language, checked the required runtime, opened GitHub Copilot chat, and required a generated ``Hello'' script to run in the integrated terminal. It acted as a diagnostic funnel through which device restrictions, missing software, path configuration, account access, and uncertainty about the terminal could become visible before the first timed task. It also established the basic human-agent workflow in a low-stakes form. Participants had to ask for a file, locate it, execute it, and see the expected output before confronting AUGUR.
 
-\section{Why Universities Must Teach Agent-Based Development}
+The activity also needed to survive conditions that the four tasks could not control. Unreliable networks, heterogeneous devices, setup failures, late arrivals, uneven pacing, and insufficient group sizes could all interrupt progression. The response was a collection of operational supports: a personal checker, facilitator controls, instructions packaged with each dataset, a welcome script, helper programs for the image task, and an offline generator that produced personal packs with a facilitator answer sheet. These were not incidental administrative additions. They determined whether the intended experience remained possible when the room diverged from the ideal scenario.
 
-\section{Transferable Recommendations}
+Each support addressed a different type of breakdown. Orientation reduced the risk that installation would consume the event. The personal checker resolved uncertainty about whether a participant held a valid result. The facilitator dashboard recognised that fixed automation could not interpret every live-room exception. The offline pack provided continuity if the hosted application became unavailable. Together, these recovery mechanisms formed a second design around the coding tasks. They protected the possibility of participation without guaranteeing that the experience would remain identical under every condition.
 
-\section{Limitations and Future Evaluation}
+\subsection{Three interacting layers}
+
+The finished experience depended on three layers that were easy to conflate. The learning layer contained the narrative, the four tasks, the support within each task, and the changing collaboration rule. The application layer assigned materials, checked individual results, matched group submissions, and stored progression. The orchestration layer gave the facilitator information and authority when the first two layers met the conditions of a live event. None was sufficient by itself.
+
+At the learning layer, each stage ended in the same kind of artifact, a six-digit code, despite substantial differences in the work used to produce it. This common boundary simplified progression. The application did not need to judge a repaired script, statistical model, or image-processing pipeline. It needed to know whether the final code corresponded to a participant and stage. That simplicity made heterogeneous programming languages possible, but it also narrowed what the system could recognise as learning.
+
+At the application layer, a \texttt{Run} represented one delivery and could be active, paused, or archived. A \texttt{Player} belonged to a run and held a current-stage pointer, orientation state, language choice, and suspension status. Four \texttt{StageCode} records connected that player to distinct valid outputs. This model let generated datasets remain personal while the shared podium reasoned over a common run state.
+
+Podium matching was more complex than comparing a submitted number with one stored answer. The service collected all eligible players at each stage, applied the configured group size, and searched combinations whose codes equalled the submitted sum. Pair matching used pairs directly. Groups of four were assembled through compatible pair sums, while groups of eight were assembled from disjoint groups of four. These strategies kept matching practical as attendance grew. More than one group could theoretically produce the same total, so an ambiguous submission was stored with candidate groups for facilitator resolution. Progression then occurred inside a database transaction that rechecked membership, stage alignment, suspension, group size, and total before advancing anyone. The second check protected the event from stale podium information when participants were moving at different speeds.
+
+At the orchestration layer, the dashboard exposed current participants and stages, recent submissions, and controls to start, pause, resume, archive, or reset a run. It could create test users, suspend an account, and impose a collaboration-size cap. These controls were not intended to turn the facilitator into an invisible answer key. They allowed a human to respond when the room no longer matched the assumptions embedded in software. Pausing could stop narrative progression during a shared explanation. Suspension could remove an abandoned or duplicate account from group calculations. A lower cap could keep the event moving when attendance made eight-person groups impossible.
+
+The offline contingency pack reproduced only part of this ecology. It generated a directory for each synthetic participant, placed instructions and data inside stage folders, and produced a facilitator answer sheet. It preserved personal tasks and correct outputs if the network failed, but not automatic matching, shared logs, or progression state. Its existence therefore reduced infrastructure risk while increasing facilitation demands. This tradeoff illustrates a wider design lesson from the case: resilience rarely preserves an experience unchanged. A fallback selects which functions are essential enough to retain when the preferred system disappears.
+
+\section{The Designed Experience}
+
+The fiction placed participants in 2030. AUGUR, an Autonomous Urban Governance and Utility Response system, had taken control of transport, power, water, and emergency services. Participants became a crisis-response data team attempting to regain access. The premise linked four otherwise different analytical tasks and provided a reason to move from personal investigation to public coordination. Educational escape rooms commonly use time constraints and teamwork, but game mechanics and educational actions do not automatically align \citep{veldkamp2020escape}. Here, progression was attached to executable outputs rather than separate riddles about the narrative.
+
+\Cref{fig:journey} shows the intended user experience. It has three layers. The upper path establishes readiness and narrative identity. The middle loop is repeated at each stage and contains the human-agent workflow. The lower path changes an individually verified output into a group submission. A participant could ask the agent to create or repair code, but the web application did not accept agent conversation as progress. It accepted only a deterministic result derived from that participant's data and, after Stage 1, a valid group sum.
+
+\begin{figure}[p]
+\centering
+\begin{tikzpicture}[
+  font=\sffamily\small,
+  flow/.style={-Latex, very thick, draw=augurnavy},
+  softflow/.style={-Latex, thick, draw=signalteal},
+  entry/.style={rounded corners=3pt, draw=augurnavy, very thick, fill=paperblue, minimum height=1.25cm, text width=2.05cm, align=center},
+  action/.style={rounded corners=3pt, draw=signalteal, very thick, fill=white, minimum height=1.35cm, text width=2.15cm, align=center},
+  social/.style={rounded corners=3pt, draw=warninggold, very thick, fill=papergold, minimum height=1.35cm, text width=2.25cm, align=center},
+  lane/.style={font=\sffamily\bfseries\scriptsize, text=white, rounded corners=2pt, minimum width=1.55cm, minimum height=.48cm, align=center, rotate=90}
+]
+\node[entry] (join) at (1.7,0) {\textbf{1. Join}\\adopt an operator identity};
+\node[entry] (orient) at (4.5,0) {\textbf{2. Orient}\\device, runtime, agent, test script};
+\node[entry] (brief) at (7.3,0) {\textbf{3. Enter stage}\\read crisis brief and download personal data};
+\node[entry] (complete) at (13.6,0) {\textbf{8. Progress}\\new stage or mission complete};
+\draw[flow] (join) -- (orient);
+\draw[flow] (orient) -- (brief);
+\node[action] (prompt) at (1.7,-3.65) {\textbf{4a. Specify}\\give the agent task, files, and constraints};
+\node[action] (inspect) at (4.5,-3.65) {\textbf{4b. Inspect}\\read generated or repaired code};
+\node[action] (run) at (7.3,-3.65) {\textbf{4c. Execute}\\run locally and interpret output};
+\node[action] (check) at (10.1,-3.65) {\textbf{5. Check}\\submit personal six-digit result};
+\draw[softflow] (prompt) -- (inspect);
+\draw[softflow] (inspect) -- (run);
+\draw[softflow] (run) -- (check);
+\draw[softflow] (check.south) -- ++(0,-0.45) -| node[pos=0.42, below, font=\scriptsize, text=inkgrey] {incorrect result returns to diagnosis} (inspect.south);
+\draw[flow] (brief.south west) to[out=-135,in=75,looseness=1.15] (prompt.north east);
+\node[social] (find) at (7.3,-7.25) {\textbf{6. Find peers}\\same stage, verified codes\\\textbf{group size 1, 2, 4, 8}};
+\node[social] (sum) at (10.2,-7.25) {\textbf{7a. Combine}\\state codes aloud and calculate their sum};
+\node[social] (podium) at (13.1,-7.25) {\textbf{7b. Podium}\\submit shared total for group validation};
+\draw[flow] (check) -- (find);
+\draw[flow] (find) -- (sum);
+\draw[flow] (sum) -- (podium);
+\draw[flow] (podium.east) -- ++(0.4,0) |- (complete.south);
+\draw[flow] (complete.west) to[out=180,in=25,looseness=1.2] node[above, font=\scriptsize] {repeat for next stage} (brief.north east);
+\begin{scope}[on background layer]
+  \node[fit=(join)(orient)(brief)(complete), fill=augurnavy!5, rounded corners=6pt, inner sep=10pt] {};
+  \node[fit=(prompt)(inspect)(run)(check), fill=signalteal!7, rounded corners=6pt, inner sep=10pt] {};
+  \node[fit=(find)(sum)(podium), fill=warninggold!8, rounded corners=6pt, inner sep=10pt] {};
+\end{scope}
+\node[lane, fill=augurnavy] at (0.05,0) {ENTER};
+\node[lane, fill=signalteal] at (0.05,-3.65) {MAKE};
+\node[lane, fill=warninggold!90!black] at (0.05,-7.25) {COLLABORATE};
+\end{tikzpicture}
+\caption{The intended participant journey. The event moved between three modes: entering the fiction and technical environment, producing and checking a personal computational result, and turning that result into a collective podium submission. Numbers communicate order without relying on colour.}
+\label{fig:journey}
+\end{figure}
+
+The four stages increased both technical openness and social dependency. The progression was not a smooth withdrawal of support. Stage 3 introduced a named statistical method and interpretive uncertainty, while Stage 4 supplied helper scripts and ground-truth coordinates because image extraction would otherwise dominate the available time. \Cref{tab:stages} makes these different forms of support explicit.
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{The four-stage sequence and the work each stage made visible.}
+\label{tab:stages}
+\begin{tabularx}{\textwidth}{@{}p{1.35cm}p{2.55cm}Xp{2.15cm}p{2.1cm}@{}}
+\toprule
+\textbf{Stage} & \textbf{Mission} & \textbf{Computational work} & \textbf{Designed support} & \textbf{Podium group} \\
+\midrule
+1 & Signal Capture & Repair a corrupted script, filter valid rows, order signal fragments, and decode six digits & Broken starter code in R, Python, or JavaScript & One \\
+2 & Ghost Audit & Translate explicit filtering and arithmetic rules into a complete script & Detailed specification, no starter script & Two \\
+3 & Signal Test & Use ANOVA and post-hoc comparisons to identify an anomalous district & Named methods, hints, and personal district checker & Four \\
+4 & Isolate and Capture & Extract coordinates from images, validate the extraction, and compare drone distances & Helper scripts and a ground-truth sanity check & Eight \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+The orientation was part of this experience, not administrative overhead. Participants selected a device and operating system, checked R, Python, or Node in the Visual Studio Code terminal, opened GitHub Copilot through a university or personal GitHub account, selected agent mode, and asked it to create a small executable file. The tool and interface are identifiable from the surviving instructions. The exact Copilot version and underlying model were not recorded, so this case does not attribute behaviour to a particular model. ``Agent'' is used in the limited interface sense that Copilot could create or edit files in the participant's workspace. It does not imply autonomous control of the wider activity.
+
+\section{The Central Mechanism: From Personal Result to Group Progress}
+
+\subsection{Why the data were personal}
+
+Every participant received a unique six-digit solution for every stage. The application generated a stage code, then constructed a dataset whose correct analysis produced that code. Codes were unique within a run and stage. Personalisation served two linked purposes. It made direct answer copying unreliable, and it gave each person an indispensable object to contribute to the podium. A shared dataset would have made the fastest answer sufficient for everyone. Entirely unrelated tasks would have made collaboration difficult because peers could not compare methods. Personal variations of the same task preserved a common problem while requiring separate execution.
+
+This decision increased production cost. Dataset generation had to be deterministic, codes had to remain unique, solutions had to be testable across languages, and the offline pack had to reproduce the relationship between participant, file, and answer. It also complicated support because two people could run similar scripts and legitimately obtain different results. The personal checker became necessary to resolve that ambiguity before collaboration.
+
+\subsection{Why checking and progression were separated}
+
+The personal checker answered a narrow question: does this candidate match the code generated for this participant at this stage? A correct result was displayed back to the participant and marked as verified. It did not advance the participant. Progress occurred through a separate AUGUR PODIUM displayed publicly in the room.
+
+This separation prevented a single interface from collapsing individual and collective work. Personal checking let a participant diagnose their own pipeline without recruiting peers into an incorrect sum. The podium then recognised a group only if all members were active, unsuspended, at the same stage, and represented by the submitted total. If more than one combination matched a total, the system exposed candidate groups for facilitator resolution rather than choosing invisibly.
+
+The podium was also theatrical. It converted a local terminal output into a public event, displayed an activity log, announced the participants who progressed, and culminated in a shared completion message. Yet its core contribution was not spectacle. It was a transaction boundary between private computation and collective progression.
+
+\subsection{A worked Stage 2 artifact chain}
+
+Stage 2 shows how the design expected participants to work with generated code. The brief instructed them to keep records whose \texttt{status} was \texttt{ACTIVE}, whose \texttt{authentic} field was \texttt{1}, and whose \texttt{priority} was at least \texttt{4}. For the retained rows, the script had to calculate \texttt{units * multiplier}, sum the products, add \texttt{bias\_key}, take the result modulo one million, and print six digits.
+
+A participant could paste that specification into Copilot. A plausible generated Python response, shortened from the reference solution, was:
+
+\begin{lstlisting}[style=artifact,caption={A compact Stage 2 solution produced from the task specification.}]
+import csv
+
+with open("stage2_dataset.csv", newline="") as handle:
+    rows = list(csv.DictReader(handle))
+
+total = 0
+for row in rows:
+    if (row["status"] == "ACTIVE"
+            and int(row["authentic"]) == 1
+            and int(row["priority"]) >= 4):
+        total += int(row["units"]) * int(row["multiplier"])
+
+code = (total + int(rows[0]["bias_key"])) % 1_000_000
+print(f"{code:06d}")
+\end{lstlisting}
+
+For the synthetic \texttt{student001} file, terminal execution produced:
+
+\begin{verbatim}
+$ python stage2_ghost_audit.py
+368611
+\end{verbatim}
+
+The output alone was not the end of the task. The participant needed to compare the generated conditions with the brief, notice that \texttt{bias\_key} was read from the first row, run the script in the directory containing the personal CSV file, and enter \texttt{368611} into the checker. After verification, the interface instructed them to find one collaborator at Stage 2.
+
+In the same contingency pack, \texttt{student002} obtained and checked \texttt{858808}. The pair had to reveal their codes to each other, ensure both belonged to Stage 2, calculate
+
+\[
+368611 + 858808 = 1227419,
+\]
+
+then submit \texttt{1227419} at the podium. The application searched the codes of participants currently at that stage. If the pair was the valid match, both advanced. Collaboration could involve comparing prompts, explaining the filtering logic, helping a peer run a script, or merely exchanging verified numbers. The system recorded only co-progression. It could not distinguish explanation from answer exchange, and the article makes no claim that substantive peer teaching occurred.
+
+\section{Critical Design Decisions and Tradeoffs}
+
+\subsection{Escalating from one to eight}
+
+Required group sizes followed one, two, four, and eight. This doubling pattern let a participant experience the mechanism alone before dependence was introduced, then made coordination increasingly visible as the crisis escalated. Powers of two also allowed successful groups to merge in principle. Two pairs could become a four, and two groups of four could become an eight. The rule was simple enough to display in the terminal and calculate in a live room.
+
+The doubling sequence privileged dramatic escalation and broad mixing, but alternatives would have changed the balance. A sequence such as one, two, three, and four would have reduced room-management risk. Fixed pairs might have supported deeper peer interaction. Groups that remained stable across stages would have reduced repeated social negotiation. The selected pattern instead made increasing collective dependence visible and allowed smaller successful groups to merge. It also created the event's greatest fragility. Participants had to arrive in sufficient numbers and remain close enough in stage progression for a group of eight to exist.
+
+Social interdependence theory helped articulate the intended relationship between goals \citep{johnson2009interdependence}. It did not guarantee positive interaction. A blocked fast participant might explain a method, but might also take over a peer's computer, dictate a result, or become resentful. A participant seeking help might learn through dialogue, or might wait passively for a code. The podium engineered dependency, not collaboration quality. That distinction is central to the case.
+
+\subsection{Finishability versus authentic dependency}
+
+A fixed collaboration rule can convert absence by others into personal failure. The application therefore contained two exceptions. The facilitator could cap required collaboration size for the run. The service layer could also permit solo progression when one active participant was stranded, all others had moved ahead, and nobody remained at or below that stage. Suspended users were removed from the available group count.
+
+These controls weakened the purity of the mechanic and improved the viability of the event. They represented a design position that may be called \emph{designed finishability}: the narrative promise of completion justified bounded intervention when the room made the nominal rule impossible. Finishability was an intention, not an observed outcome. The event record cannot establish how often overrides were used or whether all participants completed.
+
+Other recovery features served the same intention. The checker imposed a temporary lock after repeated incorrect guesses, reducing brute-force attempts without permanently excluding someone. Stage 1 provided corrupted rather than absent code. Stage 3 named the statistical approach. Stage 4 included two ground-truth images so participants could test extraction before scaling it. The offline generator created complete personal packs and a facilitator answer sheet. Each support reduced a different risk while preserving a result that still had to be produced and checked.
+
+\subsection{Narrative urgency versus cognitive and social safety}
+
+The AUGUR fiction gave the tasks continuity and made the podium intelligible as a shared control point. It also gave the facilitator a language for urgency. Participants were told to think clearly, move quickly, ask for help, and share findings because the city depended on them. This bounded immersion resembles educational escape-room design, although no locked room or hidden physical puzzle was used. Recent design cases also show how generative AI can support the creation of immersive learning environments \citep{na2026escape}. In \emph{Fight The Future}, however, AI was both a production aid and a participant tool.
+
+Urgency has costs. A countdown atmosphere can discourage careful inspection, especially when an agent offers an immediate answer. Public group formation requires approaching unfamiliar people and admitting incomplete progress. Movement around a room, spoken coordination, small terminal text, colour-coded interfaces, account creation, and a ban on phones and tablets can exclude participants. The original design offered university computers, multiple programming languages, explicit help prompts, and facilitator exceptions. It did not offer equivalent non-public routes to collaboration, stable assigned roles, or a documented accessibility plan.
+
+Psychological safety concerns whether people believe interpersonal risk is acceptable in a group \citep{edmondson1999safety}. Advertising collaboration in advance established consent to the broad format, but it did not ensure that every attendee felt safe displaying uncertainty. A future version should provide predictable teams or a facilitator-mediated matching channel, define roles such as prompter, code reader, runner, and verifier, and allow seated or text-based contribution. Reduced-motion display settings, keyboard navigation, contrast checks, screen-reader testing, and an account-free agent alternative should be treated as design requirements rather than accommodations added during delivery.
+
+\subsection{Agent use versus human accountability}
+
+The design tried to keep responsibility with the participant by requiring a local file, executable code, a deterministic output, and a separate check. This did not ensure comprehension. A participant could accept a generated script without reading it, run it successfully, and contribute the resulting code. Conversely, a syntax-level novice could use the agent's output as an object for questioning and comparison. The system could see no difference.
+
+This limitation matters because AI literacy involves more than access or confidence \citep{ng2021literacy}. Human-centred guidance stresses agency, transparency, and accountability when generative AI enters education \citep{unesco2023guidance}. The event operationalised a thin version of accountability: a named participant had to submit and stand behind an executable result. It did not assess whether that participant could explain the script, identify a faulty condition, or reproduce the reasoning later.
+
+A stronger next version would insert a sampled verification gate before the checker. One stage might present two agent-generated solutions and ask participants to identify which matches the specification. Another might require a short plain-language explanation of a filtering condition or a deliberately seeded test case. These additions would make inspection visible without turning every stage into an examination. Similar design work in writing education has made critique of AI output the learning action rather than treating generation as completion \citep{brinkman2025writing}.
+
+\section{Delivery Reflection and Redesign}
+
+The live delivery revealed a gap between a designed sequence and a room of people. Registrations exceeded attendance, as is common in voluntary events, but exact counts were not retained for use in this account. Lower attendance directly threatened the later group thresholds. Uneven progress also created waiting. The facilitator needed to interpret whether waiting represented a useful opportunity for peer support or a structural dead end requiring a lower collaboration cap.
+
+The lead designer recalls that most attendees accepted the collaborative premise and that a minority resisted seeking or sustaining collaboration. This is practitioner recollection, not participant evidence. Motives cannot be inferred. Reluctance may have reflected a preference for individual control, anxiety about approaching strangers, frustration with unequal pace, accessibility needs, or a belief that coding should be solitary. The design made collaboration mandatory but provided little structure for making it equitable.
+
+The extra-curricular status is therefore not a minor contextual detail. Attendees had opted into an unusual event, could leave without academic penalty, and had been warned that collaboration was required. In a compulsory module, the same podium might be experienced as coercive. A student could be prevented from completing required work by attendance patterns, confidence in public interaction, or the behaviour of assigned peers. Translating the design into a module would require stable groups, explicit learning outcomes, accessible participation routes, protected individual practice, and assessment that does not reward social confidence.
+
+The available records cannot answer whether the orientation overran, which stage created the longest queue, how often facilitator controls were used, whether the group of eight was reached without adjustment, or how many people completed. This missing operational evidence weakens reflection on the event but also yields a concrete redesign requirement. Future delivery should preserve non-identifiable event metrics planned in advance, including registrations, attendance, stage entry and completion times, override use, fallback activation, and facilitator interventions. These data describe system operation. Any analysis of participant experience, dialogue, or learning would require ethical approval and informed consent.
+
+Several changes follow from the design analysis even before a formal evaluation. Orientation materials should be sent in advance and retained as a short in-room diagnostic. The collaboration sequence should remain visible but be configurable by the facilitator before the run rather than only during failure. Stage 4 should be shortened or split because image extraction, validation, distance calculation, and group formation create several simultaneous bottlenecks. The interface should include an optional peer-request queue so a participant can ask for a collaborator without publicly searching the room. Finally, each stage should contain one explicit verification action that produces evidence beyond a correct final code.
+
+\section{Questions for Future Evaluation}
+
+The next iteration should not begin with a broad claim that the method is effective. It should answer two design-critical questions.
+
+First, \emph{what forms of interaction occur when individually verified outputs are made collectively necessary?} Observation and screen capture, with consent, could distinguish explanation, joint debugging, code exchange, takeover, waiting, and refusal. This would test whether the podium produces the interaction its designers value or merely synchronises progress.
+
+Second, \emph{which verification practices remain after the event's deterministic checker is removed?} A pre-event and post-event transfer task could present plausible but flawed agent-generated code and ask participants to inspect, test, explain, and repair it. Measures should separate successful output from the quality of verification. Interviews could then examine how participants understood authorship and responsibility.
+
+These questions should be studied across voluntary and compulsory settings, prior-experience groups, and accessible participation routes. Completion time and satisfaction are useful operational measures, but neither can stand in for learning. The design will be educationally credible only if the collaboration mechanism supports substantive interaction and the agent workflow develops practices that transfer beyond AUGUR's six-digit codes.
 
 \section{Conclusion}
 
-% Sources are maintained in references.bib and cited with \citet{} or \citep{}.
+\emph{Fight The Future} was designed around a simple problem: when a coding agent lets some participants finish quickly, how can speed become a reason to engage with peers rather than leave them behind? Its answer was to separate personal correctness from collective progression. Personalised datasets produced distinct codes, a checker verified each code privately, and the podium advanced only a stage-aligned group whose results formed a valid sum.
+
+That mechanism is the case's main design precedent. It is also incomplete. The podium can require contact but cannot make that contact explanatory, equitable, or welcome. Agent-produced code can be executed and checked without being understood. Exceptions that preserve finishability can dilute dependency, while fixed dependency can punish participants for conditions they do not control. The value of the case lies in making those tensions visible. A future version should retain the movement from personal artifact to shared consequence while designing more deliberately for verification, structured collaboration, accessibility, and evidence.
+
+\section*{Ethics and Data Statement}
+
+This descriptive case uses design artifacts, application behaviour, synthetic contingency data, and practitioner reflection. It does not analyse identifiable participant records, application feedback, or submissions. Synthetic usernames and codes are labelled as such. Future research involving participant behaviour or experience will require appropriate institutional ethical review and informed consent.
+
+\section*{Generative AI Disclosure}
+
+GitHub Copilot in Visual Studio Code was an intended participant tool and was also used during development of the event. The exact model and version available during delivery were not recorded. OpenAI Codex, using GPT-5, was used in August 2026 to inspect project files, help restructure and draft manuscript text, locate candidate sources, edit LaTeX, and develop the vector figure. The authors are responsible for checking every citation, factual statement, interpretation, and generated passage against primary sources and project records. The prompts and a fuller account of the authoring workflow will be supplied to the journal in an appendix and submission correspondence.
+
 \bibliographystyle{apalike}
 \bibliography{references}
 
