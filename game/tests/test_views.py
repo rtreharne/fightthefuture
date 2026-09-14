@@ -149,6 +149,25 @@ class JoinFlowTests(TestCase):
         self.assertContains(response, "No spaces are currently left.")
         self.assertEqual(EventRegistration.objects.count(), 1)
 
+    def test_registration_rejects_after_close_datetime(self):
+        event_settings = EventSettings.load()
+        event_settings.registration_close_at = timezone.now() - timedelta(minutes=1)
+        event_settings.save(update_fields=["registration_close_at", "updated_at"])
+
+        page = self.client.get("/")
+        self.assertContains(page, "Registration has closed.")
+        self.assertNotContains(page, "Spaces left:")
+        self.assertNotContains(page, 'action="/register"')
+
+        response = self.client.post(
+            "/register",
+            {"full_name": "Ada Lovelace", "email": "ada@liverpool.ac.uk"},
+            follow=True,
+        )
+
+        self.assertContains(response, "Registration has closed for this event.")
+        self.assertEqual(EventRegistration.objects.count(), 0)
+
 
 class PodiumProgressionTests(TestCase):
     def setUp(self):
@@ -371,6 +390,7 @@ class TeacherDashboardTests(TestCase):
                 "location": "Central Teaching Hub",
                 "permitted_email_domain": "@liverpool.ac.uk",
                 "registration_limit": "80",
+                "registration_close_at": "2026-09-20T17:30",
             },
             follow=True,
         )
@@ -384,6 +404,10 @@ class TeacherDashboardTests(TestCase):
         self.assertEqual(event_settings.location, "Central Teaching Hub")
         self.assertEqual(event_settings.permitted_email_domain, "liverpool.ac.uk")
         self.assertEqual(event_settings.registration_limit, 80)
+        self.assertEqual(
+            timezone.localtime(event_settings.registration_close_at).strftime("%Y-%m-%dT%H:%M"),
+            "2026-09-20T17:30",
+        )
 
         landing = self.client.get("/")
         self.assertContains(landing, "Fight The Future Autumn Session")
@@ -449,9 +473,10 @@ class OrientationWalkthroughTests(TestCase):
         self.player.refresh_from_db()
         self.assertTrue(self.player.intro_accepted)
         self.assertContains(response, "ORIENTATION")
-        self.assertContains(response, "Step 1.")
+        self.assertContains(response, "Start Orientation")
+        self.assertNotContains(response, "Set up GitHub Codespaces and Copilot.")
 
-    def test_own_device_requires_os_before_language(self):
+    def test_laptop_device_choice_is_rejected(self):
         self.player.intro_accepted = True
         self.player.save(update_fields=["intro_accepted"])
         self.client.post(
@@ -459,37 +484,39 @@ class OrientationWalkthroughTests(TestCase):
             {"action": "orientation_update", "orientation_event": "choose_device", "orientation_value": "own"},
         )
         self.player.refresh_from_db()
-        self.assertEqual(self.player.orientation_step, 2)
-        self.assertEqual(self.player.orientation_device_type, "own")
+        self.assertIsNone(self.player.orientation_device_type)
 
-        self.client.post(
-            f"/play/{self.player.id}",
-            {"action": "orientation_update", "orientation_event": "choose_language", "orientation_value": "python"},
-        )
-        self.player.refresh_from_db()
         self.assertIsNone(self.player.orientation_language)
-        self.assertEqual(self.player.orientation_step, 2)
 
-        self.client.post(
-            f"/play/{self.player.id}",
-            {"action": "orientation_update", "orientation_event": "choose_os", "orientation_value": "windows"},
-        )
+    def test_orientation_cannot_skip_setup(self):
+        self.player.intro_accepted = True
+        self.player.save(update_fields=["intro_accepted"])
+
         self.client.post(
             f"/play/{self.player.id}",
             {"action": "orientation_update", "orientation_event": "choose_language", "orientation_value": "python"},
         )
+        self.client.post(
+            f"/play/{self.player.id}",
+            {"action": "orientation_update", "orientation_event": "next_step"},
+        )
         self.player.refresh_from_db()
-        self.assertEqual(self.player.orientation_os, "windows")
-        self.assertEqual(self.player.orientation_language, "python")
-        self.assertEqual(self.player.orientation_step, 4)
+        self.assertIsNone(self.player.orientation_device_type)
+        self.assertIsNone(self.player.orientation_language)
+        self.assertEqual(self.player.orientation_step, 1)
 
-    def test_uol_flow_can_skip_os_and_complete_collapses(self):
+    def test_codespace_flow_can_complete_collapses(self):
         self.player.intro_accepted = True
         self.player.save(update_fields=["intro_accepted"])
         self.client.post(
             f"/play/{self.player.id}",
-            {"action": "orientation_update", "orientation_event": "choose_device", "orientation_value": "uol"},
+            {"action": "orientation_update", "orientation_event": "choose_device", "orientation_value": "codespace"},
         )
+        for _ in range(7):
+            self.client.post(
+                f"/play/{self.player.id}",
+                {"action": "orientation_update", "orientation_event": "next_step"},
+            )
         self.client.post(
             f"/play/{self.player.id}",
             {"action": "orientation_update", "orientation_event": "choose_language", "orientation_value": "r"},
@@ -505,7 +532,7 @@ class OrientationWalkthroughTests(TestCase):
         self.player.refresh_from_db()
         self.assertTrue(self.player.orientation_completed)
         self.assertTrue(self.player.orientation_collapsed)
-        self.assertEqual(self.player.orientation_step, 5)
+        self.assertEqual(self.player.orientation_step, 12)
 
         response = self.client.get(f"/play/{self.player.id}")
         self.assertContains(response, "Orientation complete.")
@@ -513,12 +540,48 @@ class OrientationWalkthroughTests(TestCase):
         self.assertContains(response, "Current stage:")
         self.assertContains(response, "var pausePolling = false;")
 
+    def test_codespace_flow_shows_setup_and_can_complete_without_os(self):
+        self.player.intro_accepted = True
+        self.player.save(update_fields=["intro_accepted"])
+
+        self.client.post(
+            f"/play/{self.player.id}",
+            {"action": "orientation_update", "orientation_event": "choose_device", "orientation_value": "codespace"},
+        )
+        self.client.post(
+            f"/play/{self.player.id}",
+            {"action": "orientation_update", "orientation_event": "next_step"},
+        )
+        response = self.client.get(f"/play/{self.player.id}")
+        self.assertContains(response, "Create a new private repository")
+        self.assertNotContains(response, "Reply with the word READY")
+
+        for _ in range(6):
+            self.client.post(
+                f"/play/{self.player.id}",
+                {"action": "orientation_update", "orientation_event": "next_step"},
+            )
+        self.client.post(
+            f"/play/{self.player.id}",
+            {"action": "orientation_update", "orientation_event": "choose_language", "orientation_value": "python"},
+        )
+        self.client.post(
+            f"/play/{self.player.id}",
+            {"action": "orientation_update", "orientation_event": "next_step"},
+        )
+        self.client.post(
+            f"/play/{self.player.id}",
+            {"action": "orientation_update", "orientation_event": "complete"},
+        )
+        self.player.refresh_from_db()
+        self.assertTrue(self.player.orientation_completed)
+
     def test_review_orientation_reopens_expanded_orientation_panel(self):
         self.player.intro_accepted = True
         self.player.orientation_completed = True
         self.player.orientation_collapsed = True
         self.player.orientation_step = 5
-        self.player.orientation_device_type = Player.OrientationDeviceType.UOL
+        self.player.orientation_device_type = Player.OrientationDeviceType.CODESPACE
         self.player.orientation_language = Player.OrientationLanguage.PYTHON
         self.player.save(
             update_fields=[
@@ -540,8 +603,7 @@ class OrientationWalkthroughTests(TestCase):
         self.player.refresh_from_db()
         self.assertFalse(self.player.orientation_collapsed)
         self.assertContains(response, "ORIENTATION")
-        self.assertContains(response, "Step 1.")
-        self.assertNotContains(response, "Orientation complete.")
+        self.assertContains(response, "Orientation complete.")
 
 
 class PersonalCheckerTests(TestCase):
@@ -635,7 +697,7 @@ class PersonalCheckerTests(TestCase):
             follow=True,
         )
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Correct. Enter your code into AUGUR PODIUM.")
+        self.assertContains(response, "Correct. Enter your code into the AUGUR PODIUM.")
         self.assertContains(response, "Correct solution:")
         self.assertContains(response, str(self.current_code))
         self.assertNotContains(response, 'name="personal_code"')
@@ -662,7 +724,7 @@ class PersonalCheckerTests(TestCase):
         payload = response.json()
         self.assertTrue(payload["ok"])
         self.assertEqual(payload["level"], "success")
-        self.assertEqual(payload["message"], "Correct. Enter your code into AUGUR PODIUM.")
+        self.assertEqual(payload["message"], "Correct. Enter your code into the AUGUR PODIUM.")
         self.assertTrue(payload["checker_verified"])
         self.assertEqual(payload["checker_solution_code"], self.current_code)
 
@@ -691,7 +753,7 @@ class PersonalCheckerTests(TestCase):
         self.assertEqual(payload["level"], "success")
         self.assertEqual(
             payload["message"],
-            "Correct. Combine your code with 1 collaborator and enter the sum into AUGUR PODIUM.",
+            "Correct. Combine your code with 1 collaborator and enter the sum into the AUGUR PODIUM.",
         )
         self.assertTrue(payload["checker_verified"])
         self.assertEqual(payload["checker_solution_code"], stage2_code)
@@ -700,7 +762,7 @@ class PersonalCheckerTests(TestCase):
         self.assertEqual(persisted.status_code, 200)
         self.assertContains(
             persisted,
-            "Correct. Combine your code with 1 collaborator and enter the sum into AUGUR PODIUM.",
+            "Correct. Combine your code with 1 collaborator and enter the sum into the AUGUR PODIUM.",
         )
 
     def test_async_checker_success_stage2_waits_when_no_other_players(self):
@@ -724,7 +786,7 @@ class PersonalCheckerTests(TestCase):
         self.assertTrue(payload["ok"])
         self.assertEqual(
             payload["message"],
-            "Correct. Your personal code is verified. Wait until more players reach this stage, then combine your codes and enter the sum into AUGUR PODIUM.",
+            "Correct. Your personal code is verified. Wait until more players reach this stage, then combine your codes and enter the sum into the AUGUR PODIUM.",
         )
 
     def test_async_checker_success_stage2_allows_stranded_player_to_submit(self):
@@ -749,7 +811,7 @@ class PersonalCheckerTests(TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertTrue(payload["ok"])
-        self.assertEqual(payload["message"], "Correct. Enter your code into AUGUR PODIUM.")
+        self.assertEqual(payload["message"], "Correct. Enter your code into the AUGUR PODIUM.")
 
     def test_verified_view_message_is_dynamic_when_collaboration_cap_is_one(self):
         self.player.current_stage = 2
@@ -772,11 +834,11 @@ class PersonalCheckerTests(TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertTrue(payload["ok"])
-        self.assertEqual(payload["message"], "Correct. Enter your code into AUGUR PODIUM.")
+        self.assertEqual(payload["message"], "Correct. Enter your code into the AUGUR PODIUM.")
 
         persisted = self.client.get(f"/play/{self.player.id}")
         self.assertEqual(persisted.status_code, 200)
-        self.assertContains(persisted, "Correct. Enter your code into AUGUR PODIUM.")
+        self.assertContains(persisted, "Correct. Enter your code into the AUGUR PODIUM.")
         self.assertNotContains(persisted, "Combine your code with 0 collaborators")
 
     def test_async_checker_wrong_answer_returns_direction_hint(self):
@@ -831,7 +893,7 @@ class StageContentTests(TestCase):
         python_response = self.client.get(f"/play/{self.player.id}")
         self.assertEqual(python_response.status_code, 200)
         self.assertContains(python_response, "Stage 1: Signal Capture")
-        self.assertContains(python_response, "Download the Stage 1 dataset")
+        self.assertContains(python_response, "Download stage1_dataset.csv")
         self.assertContains(python_response, "Download Stage 1 dataset")
         self.assertContains(python_response, "stage1_signal.py")
         self.assertContains(python_response, "python stage1_signal.py stage1_dataset.csv")

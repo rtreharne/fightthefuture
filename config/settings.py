@@ -20,7 +20,7 @@ def env_list(name: str, default: list[str] | None = None) -> list[str]:
 
 SECRET_KEY = os.getenv("SECRET_KEY", "change-me")
 DEBUG = env_bool("DEBUG", True)
-ALLOWED_HOSTS = env_list("ALLOWED_HOSTS", ["localhost", "127.0.0.1"])
+ALLOWED_HOSTS = env_list("ALLOWED_HOSTS", ["localhost", "127.0.0.1", "0.0.0.0"])
 
 if not DEBUG and os.getenv("RENDER") and SECRET_KEY == "change-me":
     raise RuntimeError("SECRET_KEY must be set when DEBUG is false.")

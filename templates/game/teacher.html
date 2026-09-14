@@ -133,7 +133,7 @@
   <h2 style="margin-top: 0;">Facilitator Dashboard</h2>
   {% if run %}
     <p>Current run: <strong>{{ run.name }}</strong> | Status: <strong>{{ run.get_status_display }}</strong></p>
-    <p>Collaboration override: <strong>{% if collaboration_size_cap %}{{ collaboration_size_cap }}{% else %}default 1/2/4/8{% endif %}</strong></p>
+    <p>Collaboration override: <strong>{% if collaboration_size_cap %}{{ collaboration_size_cap }}{% else %}default 1/2/4/4{% endif %}</strong></p>
   {% else %}
     <p class="warning">No current run is active.</p>
   {% endif %}
@@ -214,6 +214,9 @@
     <input id="permitted-email-domain" name="permitted_email_domain" type="text" maxlength="120" value="{{ event_settings.permitted_email_domain }}" required>
     <label for="registration-limit">Registration limit</label>
     <input id="registration-limit" name="registration_limit" type="number" min="1" max="10000" value="{{ event_settings.registration_limit }}" required>
+    <label for="registration-close-at">Registration closes</label>
+    <input id="registration-close-at" name="registration_close_at" type="datetime-local" value="{% if event_settings.registration_close_at %}{{ event_settings.registration_close_at|date:'Y-m-d\\TH:i' }}{% endif %}">
+    <p class="muted">Optional. Uses Europe/London time. Leave blank to keep registration open until the event limit is reached.</p>
     <button type="submit">Save Event Details</button>
   </form>
 </div>

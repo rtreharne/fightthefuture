@@ -15,6 +15,7 @@ class EventSettings(models.Model):
     location = models.CharField(max_length=200, blank=True)
     permitted_email_domain = models.CharField(max_length=120, default="liverpool.ac.uk")
     registration_limit = models.PositiveSmallIntegerField(default=100, validators=[MinValueValidator(1), MaxValueValidator(10000)])
+    registration_close_at = models.DateTimeField(null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -93,8 +94,7 @@ class Run(models.Model):
 
 class Player(models.Model):
     class OrientationDeviceType(models.TextChoices):
-        OWN = "own", "Own Device"
-        UOL = "uol", "University of Liverpool Machine"
+        CODESPACE = "codespace", "Use GitHub Codespace"
 
     class OrientationOS(models.TextChoices):
         WINDOWS = "windows", "Windows"
@@ -105,7 +105,6 @@ class Player(models.Model):
     class OrientationLanguage(models.TextChoices):
         R = "r", "R"
         PYTHON = "python", "Python"
-        JAVASCRIPT = "javascript", "JavaScript"
 
     run = models.ForeignKey(Run, on_delete=models.CASCADE, related_name="players")
     username = models.CharField(max_length=80)
@@ -133,7 +132,7 @@ class Player(models.Model):
     intro_accepted = models.BooleanField(default=False)
     orientation_completed = models.BooleanField(default=False)
     orientation_collapsed = models.BooleanField(default=False)
-    orientation_step = models.PositiveSmallIntegerField(default=1, validators=[MinValueValidator(1), MaxValueValidator(5)])
+    orientation_step = models.PositiveSmallIntegerField(default=1, validators=[MinValueValidator(1), MaxValueValidator(12)])
     orientation_device_type = models.CharField(
         max_length=12,
         choices=OrientationDeviceType.choices,

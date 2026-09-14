@@ -1,5 +1,6 @@
 {% extends "game/base.html" %}
 {% load game_extras %}
+{% load static %}
 
 {% block content %}
 <style>
@@ -17,6 +18,15 @@
   }
   .orientation-actions button {
     width: auto;
+  }
+  .orientation-nav {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    margin-top: 12px;
+  }
+  .orientation-nav form {
+    margin: 0;
   }
   .orientation-note {
     border: 1px solid var(--line);
@@ -267,18 +277,18 @@
       {% if waiting_for_collaborators %}
         <p>
           <strong>Collaboration requirement:</strong>
-          This stage requires collaborators. Your code is ready, but you need to wait until more players progress to this stage before submitting to AUGUR PODIUM.
+          This stage requires collaborators. Your code is ready, but you need to wait until more players progress to this stage before submitting to the AUGUR PODIUM.
         </p>
       {% elif required_collaborators > 0 %}
         <p>
           <strong>Collaboration requirement:</strong>
           Work with {{ required_collaborators }} collaborator{% if required_collaborators != 1 %}s{% endif %}.
-          Submit the sum of all your stage codes to AUGUR PODIUM.
+          Submit the sum of all your stage codes to the AUGUR PODIUM.
         </p>
       {% else %}
         <p>
           <strong>Collaboration requirement:</strong>
-          No collaborators required. Submit your own 6-digit stage code to AUGUR PODIUM.
+          No collaborators required. Submit your own 6-digit stage code to the AUGUR PODIUM.
         </p>
       {% endif %}
 
@@ -304,18 +314,19 @@
       {% elif checker_is_verified %}
         <p><strong>Correct solution:</strong> <code>{{ checker_solution_code }}</code></p>
         {% if current_stage == 1 %}
-          <p class="success">Correct. Enter your code into AUGUR PODIUM.</p>
+          <p class="success">Correct. Enter your code into the AUGUR PODIUM.</p>
         {% elif waiting_for_collaborators %}
           <p class="success">
-            Correct. Your personal code is verified. Wait until more players reach this stage, then combine your codes and enter the sum into AUGUR PODIUM.
+            Correct. Your personal code is verified. Wait until more players reach this stage, then combine your codes and enter the sum into the AUGUR PODIUM.
           </p>
         {% elif required_collaborators > 0 %}
           <p class="success">
-            Correct. Combine your code with {{ required_collaborators }} collaborator{% if required_collaborators != 1 %}s{% endif %} and enter the sum into AUGUR PODIUM.
+            Correct. Combine your code with {{ required_collaborators }} collaborator{% if required_collaborators != 1 %}s{% endif %} and enter the sum into the AUGUR PODIUM.
           </p>
         {% else %}
-          <p class="success">Correct. Enter your code into AUGUR PODIUM.</p>
+          <p class="success">Correct. Enter your code into the AUGUR PODIUM.</p>
         {% endif %}
+        <p class="muted"><strong>What is AUGUR PODIUM?</strong> It is another computer in the room. Stand up and look around; it should be clearly labelled. Can't find it? Ask the facilitator.</p>
       {% else %}
         <div id="checker-feedback" class="muted" aria-live="polite"></div>
         <div id="checker-lock-status" class="{% if checker_lock_seconds > 0 %}warning{% else %}muted{% endif %}" aria-live="polite">
@@ -475,7 +486,7 @@
   </div>
 
   {% if not orientation_is_open %}
-    <p class="muted">Orientation in progress (step {{ player.orientation_step }}/5).</p>
+    <p class="muted">{% if player.orientation_device_type %}Orientation in progress (part {{ player.orientation_step|add:"-1" }}/11).{% else %}Ready to start orientation.{% endif %}</p>
     <form method="post">
       {% csrf_token %}
       <input type="hidden" name="action" value="orientation_update">
@@ -489,71 +500,73 @@
       </div>
 
       <div class="panel" style="margin-bottom: 0;">
-        <p><strong>Step 1.</strong> Are you using your own laptop or a University of Liverpool machine?</p>
-        <p class="warning">Tablet devices and mobile phones cannot be used for this activity.</p>
+        <p><strong>Before you begin: why GitHub Codespaces?</strong></p>
+        <p><strong>GitHub</strong> is an online service for sharing and collaborating on software. We are using its <strong>Codespaces</strong> feature—not GitHub version control today—to give everyone the same coding environment in the cloud.</p>
+        <p>A Codespace opens VS Code in your browser, so you can get started quickly on almost any PC or device without installing and troubleshooting different software setups.</p>
+        <div class="orientation-note">
+          <strong>Important:</strong> Read and complete every instruction in this orientation, in order. Do not skip ahead. You must finish each check before moving to the next part.
+        </div>
         <div class="orientation-actions">
           <form method="post">
             {% csrf_token %}
             <input type="hidden" name="action" value="orientation_update">
             <input type="hidden" name="orientation_event" value="choose_device">
-            <input type="hidden" name="orientation_value" value="own">
-            <button type="submit" class="{% if player.orientation_device_type == 'own' %}alt{% endif %}">Own laptop</button>
-          </form>
-          <form method="post">
-            {% csrf_token %}
-            <input type="hidden" name="action" value="orientation_update">
-            <input type="hidden" name="orientation_event" value="choose_device">
-            <input type="hidden" name="orientation_value" value="uol">
-            <button type="submit" class="{% if player.orientation_device_type == 'uol' %}alt{% endif %}">University of Liverpool machine</button>
+            <input type="hidden" name="orientation_value" value="codespace">
+            <button type="submit">Start Orientation</button>
           </form>
         </div>
       </div>
 
-      {% if player.orientation_device_type == "own" %}
+      {% if player.orientation_device_type == "codespace" %}
       <div class="panel" style="margin-bottom: 0;">
-        <p><strong>Step 2.</strong> Select your operating system and install VS Code.</p>
-        <div class="orientation-actions">
-          {% for os_value, os_label in player.OrientationOS.choices %}
-          <form method="post">
-            {% csrf_token %}
-            <input type="hidden" name="action" value="orientation_update">
-            <input type="hidden" name="orientation_event" value="choose_os">
-            <input type="hidden" name="orientation_value" value="{{ os_value }}">
-            <button type="submit" class="{% if player.orientation_os == os_value %}alt{% endif %}">{{ os_label }}</button>
-          </form>
-          {% endfor %}
+        {% if player.orientation_step >= 12 %}<p><strong>Orientation complete.</strong> You can review the setup with the facilitator.</p>
+        {% elif player.orientation_step == 2 %}<p><strong>Step 1.</strong> <a href="https://github.com/signup" target="_blank" rel="noopener">Create an account</a> or <a href="https://github.com/login" target="_blank" rel="noopener">sign in</a> to GitHub.</p>
+        {% elif player.orientation_step == 3 %}<p><strong>Step 2.</strong> Create a new private repository.</p>
+        {% elif player.orientation_step == 4 %}<p><strong>Step 3.</strong> Click the <strong>Create a codespace</strong> button.</p><p>Then click <strong>Create new codespace</strong>.</p><p>Wait for GitHub to set up your new Codespace. This takes about one minute.</p>
+        {% elif player.orientation_step == 6 %}<p><strong>Step 4.</strong> Trust folder.</p><p>If you see a message asking you to trust the folder, click <strong>Trust folder</strong>.</p><p>This tells VS Code that you recognise and trust the project files in your Codespace. It allows the editor and its tools to work normally with the files, extensions and terminal commands needed for the workshop.</p>
+        {% elif player.orientation_step == 7 %}<p><strong>Step 5.</strong> Test Co-Pilot.</p><img src="/static/game/orientation/copilot-chat.svg" alt="Copilot Chat panel"><p>Co-Pilot is an AI assistant inside VS Code. It can explain ideas, write code, fix errors and help you explore data.</p><p>Choose the language you will use:</p><div class="orientation-actions">{% for language_value, language_label in player.OrientationLanguage.choices %}<form method="post">{% csrf_token %}<input type="hidden" name="action" value="orientation_update"><input type="hidden" name="orientation_event" value="choose_language"><input type="hidden" name="orientation_value" value="{{ language_value }}"><button type="submit" class="{% if player.orientation_language == language_value %}alt{% endif %}">{{ language_label }}</button></form>{% endfor %}</div>{% if player.orientation_language == "python" %}<p>Ask Co-Pilot to create <code>hello_world.py</code> that prints <code>Hello, world!</code>, then run it in the terminal.</p>{% elif player.orientation_language == "r" %}<p>Ask Co-Pilot to create <code>hello_world.R</code> that prints <code>Hello, world!</code>, then run it in the terminal.</p><p>If prompted to install the recommended R extension from REditorSupport, select <strong>Install</strong>. If prompted to install the <code>languageserver</code> package, select <strong>Never ask again</strong>.</p>{% endif %}
+        {% elif player.orientation_step == 7 %}<p><strong>Step 6.</strong> Test Co-Pilot.</p><img src="/static/game/orientation/copilot-chat.svg" alt="Copilot Chat panel"><p>Co-Pilot is an AI assistant inside VS Code. It can explain ideas, write code, fix errors and help you explore data.</p><p>Choose the language you will use:</p><div class="orientation-actions">{% for language_value, language_label in player.OrientationLanguage.choices %}<form method="post">{% csrf_token %}<input type="hidden" name="action" value="orientation_update"><input type="hidden" name="orientation_event" value="choose_language"><input type="hidden" name="orientation_value" value="{{ language_value }}"><button type="submit" class="{% if player.orientation_language == language_value %}alt{% endif %}">{{ language_label }}</button></form>{% endfor %}</div>{% if player.orientation_language == "python" %}<p>Ask Co-Pilot to create <code>hello_world.py</code> that prints <code>Hello, world!</code>, then run it in the terminal.</p>{% elif player.orientation_language == "r" %}<p>Ask Co-Pilot to create <code>hello_world.R</code> that prints <code>Hello, world!</code>, then run it in the terminal.</p><p>If prompted to install the recommended R extension from REditorSupport, select <strong>Install</strong>. If prompted to install the <code>languageserver</code> package, select <strong>Never ask again</strong>.</p>{% endif %}
+        {% elif player.orientation_step == 8 %}<p><strong>Step 6.</strong> Grant Co-Pilot access to the workspace.</p><img src="/static/game/orientation/copilot-permissions.svg" alt="Copilot workspace permission dialog"><p>Find <strong>Default Permissions</strong> at the bottom of the chat window, click it, and select <strong>Allow All</strong>. This lets Co-Pilot work with the files and terminal in this Codespace.</p>
+        {% endif %}
+        {% if player.orientation_step < 9 %}
+        <div class="orientation-nav">
+        {% if player.orientation_step != 7 %}
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="orientation_update">
+          <input type="hidden" name="orientation_event" value="next_step">
+          <button type="submit">Next</button>
+        </form>
+        {% endif %}
+        {% if player.orientation_step > 2 %}
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="orientation_update">
+          <input type="hidden" name="orientation_event" value="previous_step">
+          <button type="submit" class="alt">Back</button>
+        </form>
+        {% endif %}
         </div>
-        <p>Install VS Code from <a href="https://code.visualstudio.com/download" target="_blank" rel="noopener">code.visualstudio.com/download</a>.</p>
-        {% if player.orientation_os == "windows" %}
-          <p class="muted">Windows: download the User Installer and run it.</p>
-        {% elif player.orientation_os == "mac" %}
-          <p class="muted">Mac: download for macOS, drag VS Code to Applications.</p>
-        {% elif player.orientation_os == "chromebook" %}
-          <p class="muted">Chromebook: enable Linux development, then install VS Code Linux build.</p>
-        {% elif player.orientation_os == "linux" %}
-          <p class="muted">Linux: install from the `.deb`/`.rpm` package on the download page.</p>
         {% endif %}
       </div>
       {% endif %}
 
-      {% if orientation_can_choose_language %}
+      {% if player.orientation_step == 7 and player.orientation_language %}
       <div class="panel" style="margin-bottom: 0;">
-        <p><strong>Step 3.</strong> Choose your preferred language and check installation in VS Code terminal.</p>
-        {% if player.orientation_device_type == "uol" %}
-          <div class="orientation-note">
-            <p style="margin-top: 0;"><strong>University of Liverpool machine setup:</strong></p>
-            <ol>
-              <li>Open <code>Install University Applications</code> from the Windows search.</li>
-              <li>Install <code>Visual Studio Code</code>.</li>
-              <li>In the same app, check <code>R 4.5.2</code> and install it if needed.</li>
-              <li>Open VS Code, then open Extensions (<code>Ctrl + Shift + X</code>).</li>
-              <li>If you are using R, install the <code>R</code> extension by <code>REditorSupport</code>.</li>
-              <li>Open terminal in VS Code: <code>Terminal &gt; New Terminal</code>.</li>
-              <li>For R on PowerShell, run:<br><code>Remove-Item Alias:r -Force -ErrorAction SilentlyContinue; R --version</code></li>
-            </ol>
-            <p class="muted" style="margin-bottom: 0;">If software is unavailable in Install University Applications, ask the facilitator for help.</p>
-          </div>
-        {% endif %}
+        <p><strong>Step 5 continued.</strong> Update Co-Pilot permissions.</p>
+        <p>Find <strong>Default Permissions</strong> at the bottom of the chat window on the right. Click it and select <strong>Allow All</strong>. This allows Co-Pilot to work with the files and terminal in your Codespace.</p>
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="orientation_update">
+          <input type="hidden" name="orientation_event" value="complete">
+          <button type="submit">Orientation Complete</button>
+        </form>
+      </div>
+      {% endif %}
+
+      {% if False %}
+      <div class="panel" style="margin-bottom: 0;">
+        <p><strong>Step 8.</strong> Choose your preferred language and check it in the Codespace terminal.</p>
         <div class="orientation-actions">
           {% for language_value, language_label in player.OrientationLanguage.choices %}
           <form method="post">
@@ -575,30 +588,35 @@
         {% elif player.orientation_language == "python" %}
           <p>Terminal check: <code>python --version</code> (fallback <code>python3 --version</code>)</p>
           <p>If missing: install from <a href="https://www.python.org/downloads/" target="_blank" rel="noopener">python.org/downloads</a>.</p>
-        {% elif player.orientation_language == "javascript" %}
-          <p>Terminal check: <code>node --version</code></p>
-          <p>If missing: install Node.js from <a href="https://nodejs.org/en/download" target="_blank" rel="noopener">nodejs.org/download</a>.</p>
         {% endif %}
       </div>
       {% endif %}
 
-      {% if player.orientation_language %}
+      {% if False %}
       <div class="panel" style="margin-bottom: 0;">
-        <p><strong>Step 4.</strong> In VS Code, open chat with <code>Ctrl + Shift + I</code>, type any message, then log in to GitHub when prompted. If needed, create a GitHub account first.</p>
-        {% if player.orientation_step < 5 %}
+        <p><strong>Step 9.</strong> In the Codespace VS Code window, open Copilot Chat with <code>Ctrl + Shift + I</code>, type any message, and confirm that Copilot replies.</p>
+        {% if player.orientation_step < 11 %}
+        <div class="orientation-nav">
         <form method="post">
           {% csrf_token %}
           <input type="hidden" name="action" value="orientation_update">
           <input type="hidden" name="orientation_event" value="next_step">
-          <button type="submit">I completed Step 4</button>
+          <button type="submit">Next</button>
         </form>
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="orientation_update">
+          <input type="hidden" name="orientation_event" value="previous_step">
+          <button type="submit" class="alt">Back</button>
+        </form>
+        </div>
         {% endif %}
       </div>
       {% endif %}
 
-      {% if player.orientation_step >= 5 and player.orientation_language %}
+      {% if False %}
       <div class="panel" style="margin-bottom: 0;">
-        <p><strong>Step 5.</strong> Create and run a test script.</p>
+        <p><strong>Step 9.</strong> Create and run a test script.</p>
         <ol>
           <li>In VS Code, go to <code>File</code> -> <code>Open Folder</code>.</li>
           <li>Create a new folder to work in, for example <code>fight_the_future</code>, and open it.</li>
@@ -606,25 +624,29 @@
             <li>type the following prompt into you Agent Chat (make sure agent mode is selected, not chat or plan)</li>
           {% elif player.orientation_language == "python" %}
             <li>Prompt: create <code>hello.py</code> that prints <code>Hello from Python</code>.</li>
-          {% elif player.orientation_language == "javascript" %}
-            <li>Prompt: create <code>hello.js</code> that logs <code>Hello from JavaScript</code>.</li>
           {% endif %}
         </ol>
         {% if player.orientation_language == "r" %}
           <p>Run in terminal: <code>Rscript hello.R</code></p>
         {% elif player.orientation_language == "python" %}
           <p>Run in terminal: <code>python hello.py</code> (or <code>python3 hello.py</code>)</p>
-        {% elif player.orientation_language == "javascript" %}
-          <p>Run in terminal: <code>node hello.js</code></p>
         {% endif %}
         <p class="muted">You can run scripts from the VS Code terminal.</p>
         {% if not player.orientation_completed %}
+        <div class="orientation-nav">
         <form method="post">
           {% csrf_token %}
           <input type="hidden" name="action" value="orientation_update">
           <input type="hidden" name="orientation_event" value="complete">
-          <button type="submit">Mark Orientation Complete</button>
+          <button type="submit">Complete Orientation</button>
         </form>
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="orientation_update">
+          <input type="hidden" name="orientation_event" value="previous_step">
+          <button type="submit" class="alt">Back</button>
+        </form>
+        </div>
         {% endif %}
       </div>
       {% endif %}

@@ -2,7 +2,7 @@ from django.test import TestCase
 
 from game.constants import STAGE_COUNT
 from game.models import Player, PodiumSubmission, Run, StageCode
-from game.services import create_player, find_matching_groups, process_podium_submission, resolve_pending_submission
+from game.services import create_player, find_matching_groups, process_podium_submission, required_group_size, resolve_pending_submission
 
 
 class CodeGenerationTests(TestCase):
@@ -77,12 +77,22 @@ class MatchingEngineTests(TestCase):
         self.assertEqual(len(stage3), 1)
         self.assertEqual(set(stage3[0].player_ids), {p.id for p in players})
 
-    def test_group_size_eight_stage_four_match(self):
+    def test_stage_three_does_not_reduce_to_two_while_more_players_can_arrive(self):
+        first = self._create_player_with_stage_code("s3_wait_a", 3, 100000)
+        second = self._create_player_with_stage_code("s3_wait_b", 3, 110000)
+        self._create_player_with_stage_code("s2_waiting", 2, 120000)
+
+        matches = find_matching_groups(self.run, 210000)
+
+        self.assertEqual(matches, [])
+        self.assertEqual(required_group_size(self.run, 3), 4)
+
+    def test_group_size_four_stage_four_match(self):
         players = [
             self._create_player_with_stage_code(f"s4_{idx}", 4, 100000 + idx * 1000)
-            for idx in range(8)
+            for idx in range(4)
         ]
-        target = sum(100000 + idx * 1000 for idx in range(8))
+        target = sum(100000 + idx * 1000 for idx in range(4))
 
         matches = find_matching_groups(self.run, target)
         stage4 = [m for m in matches if m.stage == 4]

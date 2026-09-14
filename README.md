@@ -23,7 +23,7 @@ The app is designed for live workshop delivery with a facilitator dashboard, det
   - Stage 1: solo
   - Stage 2: pair
   - Stage 3: group of 4
-  - Stage 4: group of 8
+  - Stage 4: group of 4
 - Dynamic fallback: if a player is truly stranded at a stage, solo progression can be allowed to avoid deadlock.
 
 ## Key User Flows

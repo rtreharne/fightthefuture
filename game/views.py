@@ -3,7 +3,7 @@ from __future__ import annotations
 import binascii
 import csv
 from collections import defaultdict
-from datetime import timedelta
+from datetime import datetime, timedelta
 from io import BytesIO, StringIO
 import math
 import random
@@ -37,7 +37,7 @@ from .services import (
     start_run,
 )
 
-ORIENTATION_MAX_STEP = 5
+ORIENTATION_MAX_STEP = 12
 JOIN_USERNAME_RE = re.compile(r"^[A-Za-z0-9._-]+$")
 
 FEEDBACK_LIKERT_SECTIONS = [
@@ -82,11 +82,11 @@ def _sync_orientation_step(player: Player) -> None:
     if not player.orientation_device_type:
         player.orientation_step = 1
         return
-    if player.orientation_device_type == Player.OrientationDeviceType.OWN and not player.orientation_os:
-        player.orientation_step = 2
-        return
     if not player.orientation_language:
-        player.orientation_step = 3
+        if player.orientation_step < 2:
+            player.orientation_step = 2
+        elif player.orientation_step >= 9:
+            player.orientation_step = 9
         return
     if player.orientation_step < 4:
         player.orientation_step = 4
@@ -98,62 +98,66 @@ def _update_orientation(player: Player, event: str, value: str) -> None:
         return
 
     if event == "choose_device":
-        if value not in {Player.OrientationDeviceType.OWN, Player.OrientationDeviceType.UOL}:
+        if value != Player.OrientationDeviceType.CODESPACE:
             return
         player.orientation_device_type = value
         player.orientation_os = None
         player.orientation_language = None
         player.orientation_completed = False
         player.orientation_collapsed = False
-        player.orientation_step = 2 if value == Player.OrientationDeviceType.OWN else 3
+        player.orientation_step = 2
         return
 
     if event == "choose_os":
-        if player.orientation_device_type != Player.OrientationDeviceType.OWN:
-            return
-        allowed = {
-            Player.OrientationOS.WINDOWS,
-            Player.OrientationOS.MAC,
-            Player.OrientationOS.CHROMEBOOK,
-            Player.OrientationOS.LINUX,
-        }
-        if value not in allowed:
-            return
-        player.orientation_os = value
-        if player.orientation_step < 3:
-            player.orientation_step = 3
         return
 
     if event == "choose_language":
         if not player.orientation_device_type:
             return
-        if player.orientation_device_type == Player.OrientationDeviceType.OWN and not player.orientation_os:
+        if player.orientation_device_type != Player.OrientationDeviceType.CODESPACE:
             return
         allowed = {
             Player.OrientationLanguage.R,
             Player.OrientationLanguage.PYTHON,
-            Player.OrientationLanguage.JAVASCRIPT,
         }
-        if value not in allowed:
+        if player.orientation_step not in {7, 9} or value not in allowed:
             return
         player.orientation_language = value
-        if player.orientation_step < 4:
-            player.orientation_step = 4
+        player.orientation_step = 10 if player.orientation_step == 9 else 7
         return
 
     if event == "next_step":
         _sync_orientation_step(player)
-        if player.orientation_step < ORIENTATION_MAX_STEP:
+        if 2 <= player.orientation_step <= 6 and player.orientation_device_type == Player.OrientationDeviceType.CODESPACE:
+            player.orientation_step = 6 if player.orientation_step == 4 else player.orientation_step + 1
+        elif player.orientation_step == 10 and player.orientation_language:
             player.orientation_step += 1
+        return
+
+    if event == "previous_step":
+        if player.orientation_step == 2:
+            player.orientation_device_type = None
+            player.orientation_os = None
+            player.orientation_language = None
+            player.orientation_step = 1
+        elif player.orientation_step >= 3:
+            player.orientation_step -= 1
+            if player.orientation_step == 5:
+                player.orientation_step = 4
+            if player.orientation_step == 9:
+                player.orientation_language = None
         return
 
     if event == "complete":
         _sync_orientation_step(player)
-        if player.orientation_device_type and player.orientation_language:
-            if player.orientation_device_type == Player.OrientationDeviceType.UOL or player.orientation_os:
-                player.orientation_completed = True
-                player.orientation_step = ORIENTATION_MAX_STEP
-                player.orientation_collapsed = True
+        if (
+            player.orientation_step >= 7
+            and player.orientation_device_type == Player.OrientationDeviceType.CODESPACE
+            and player.orientation_language
+        ):
+            player.orientation_completed = True
+            player.orientation_step = ORIENTATION_MAX_STEP
+            player.orientation_collapsed = True
         return
 
     if event == "reopen":
@@ -211,6 +215,10 @@ def _registrations_full(event_settings: EventSettings) -> bool:
     return _registration_spaces_left(event_settings) <= 0
 
 
+def _registration_closed(event_settings: EventSettings) -> bool:
+    return bool(event_settings.registration_close_at and timezone.now() >= event_settings.registration_close_at)
+
+
 def _pop_registration_success(request) -> dict[str, str] | None:
     raw = request.session.pop(REGISTRATION_SUCCESS_SESSION_KEY, None)
     if not isinstance(raw, dict):
@@ -236,6 +244,7 @@ def home(request):
             "registration_limit": event_settings.registration_limit,
             "registration_spaces_left": _registration_spaces_left(event_settings),
             "registrations_full": _registrations_full(event_settings),
+            "registration_closed": _registration_closed(event_settings),
             "registration_form_data": _pop_registration_form_data(request),
             "registration_success": _pop_registration_success(request),
         },
@@ -247,6 +256,9 @@ def register_view(request):
         return redirect("home")
 
     event_settings = _event_settings()
+    if _registration_closed(event_settings):
+        messages.error(request, "Registration has closed for this event.")
+        return redirect("home")
     full_name = request.POST.get("full_name", "").strip()
     email = request.POST.get("email", "").strip()
     email_key = email.lower()
@@ -325,6 +337,7 @@ def _event_context(request) -> dict[str, object]:
         "event_settings": event_settings,
         "registration_count": registration_count,
         "registration_spaces_left": max(0, event_settings.registration_limit - registration_count),
+        "registration_closed": _registration_closed(event_settings),
         "registrations": list(event_settings.registrations.order_by("-created_at", "-id")),
         "event_domain_label": _registration_domain_label(event_settings),
     }
@@ -342,6 +355,12 @@ def _update_event_settings_from_request(request, event_settings: EventSettings) 
     event_settings.location = request.POST.get("location", "")
     event_settings.permitted_email_domain = request.POST.get("permitted_email_domain", "")
     event_settings.registration_limit = int(request.POST.get("registration_limit", "100"))
+    registration_close_at = request.POST.get("registration_close_at", "").strip()
+    if registration_close_at:
+        close_at = datetime.fromisoformat(registration_close_at)
+        event_settings.registration_close_at = timezone.make_aware(close_at) if timezone.is_naive(close_at) else close_at
+    else:
+        event_settings.registration_close_at = None
     event_settings.save()
 
 
@@ -634,15 +653,15 @@ def play_view(request, user_id: int):
         if group_size > 1 and available_count <= 1:
             return (
                 "Correct. Your personal code is verified. Wait until more players reach this stage, "
-                "then combine your codes and enter the sum into AUGUR PODIUM."
+                "then combine your codes and enter the sum into the AUGUR PODIUM."
             )
         collaborators = max(0, group_size - 1)
         if collaborators == 0:
-            return "Correct. Enter your code into AUGUR PODIUM."
+            return "Correct. Enter your code into the AUGUR PODIUM."
         suffix = "" if collaborators == 1 else "s"
         return (
             f"Correct. Combine your code with {collaborators} collaborator{suffix} "
-            "and enter the sum into AUGUR PODIUM."
+            "and enter the sum into the AUGUR PODIUM."
         )
 
     def checker_response(level: str, message_text: str, **payload):
@@ -802,8 +821,9 @@ def play_view(request, user_id: int):
         checker_lock_seconds = max(1, int((player.checker_locked_until - now).total_seconds()))
     orientation_is_open = not player.orientation_collapsed
     orientation_pause_polling = orientation_is_open and not player.orientation_completed
-    orientation_can_choose_language = bool(player.orientation_device_type) and (
-        player.orientation_device_type != Player.OrientationDeviceType.OWN or bool(player.orientation_os)
+    orientation_can_choose_language = (
+        player.orientation_device_type == Player.OrientationDeviceType.CODESPACE
+        and player.orientation_step == 7
     )
 
     return render(

@@ -2,12 +2,12 @@ STAGE_COUNT = 4
 FINAL_STAGE = STAGE_COUNT
 COMPLETED_STAGE = STAGE_COUNT + 1
 
-# Stage 1 is solo; stages 2-4 require exact collaboration sizes.
+# Stage 1 is solo; stages 2-4 require exact collaboration sizes when possible.
 STAGE_GROUP_SIZES = {
     1: 1,
     2: 2,
     3: 4,
-    4: 8,
+    4: 4,
 }
 
 STAGE_DETAILS = {

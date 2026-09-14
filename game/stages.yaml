@@ -15,11 +15,12 @@ stages:
 
       This is your first breach point.
 
-      Recover your personal 6-digit Stage 1 code and submit it to AUGUR PODIUM.
+      Recover your personal 6-digit Stage 1 code and submit it to the AUGUR PODIUM.
     instructions:
       - "Create a new directory called stage_1 in your VS Code project."
-      - "Create a new script file in that directory using the filename below for your chosen language."
-      - "Download the Stage 1 dataset from this page and save it in stage_1 as stage1_dataset.csv."
+      - "In the Codespace terminal, move into that directory by running: cd stage_1"
+      - "Download stage1_dataset.csv from this page. In the Codespace Explorer, right-click the stage_1 folder, choose Upload..., select the downloaded stage1_dataset.csv file, and confirm that it appears inside stage_1."
+      - "Create a new script file in stage_1 using the filename below for your chosen language."
       - "Copy and paste the starter code exactly as shown, then debug syntax errors until it runs."
       - "Run the corrected script on stage1_dataset.csv to extract your personal 6-digit stage code."
     language_variants:
@@ -72,44 +73,6 @@ stages:
               digits.append(str(digit))
 
           print("".join(digits))
-      javascript:
-        file_name: "stage1_signal.js"
-        run_command: "node stage1_signal.js stage1_dataset.csv"
-        code: |
-          const fs = require("fs");
-
-          function parseCsv(path) {
-            const lines = fs.readFileSync(path, "utf8").trim().split("\n");
-            const headers = lines[0].split(",");
-            return lines.slice(1).map((line) => {
-              const values = line.split(",");
-              const row = {};
-              headers.forEach((header, index) => {
-                row[header] = values[index];
-              });
-              return row;
-            });
-          }
-
-          const datasetPath = process.argv[2];
-          if (!datasetPath) {
-            console.error("Usage: node stage1_signal.js <dataset_path>");
-            process.exit(1);
-          }
-
-          const rows = parseCsv(datasetPath);
-          const signals = rows
-            .filter((row) => Number(row.keep) === 1)
-            .sort((a, b) => Number(a.pos) - Number(b.pos));
-
-          const digits = signals.map((row) => {
-            const encoded = Number(row.encoded);
-            const key = Number(row.key);
-            const pos = Number(row.pos);
-            return String((encoded - key - (pos * 3)) % 10);
-          });
-
-          console.log(digits.join(""));
       default:
         file_name: "stage1_signal.py"
         run_command: "python stage1_signal.py stage1_dataset.csv"
@@ -157,7 +120,9 @@ stages:
 
     instructions:
       - "Create a new directory called stage_2 in your VS Code project."
-      - "Download the Stage 2 dataset from this page and save it in stage_2 as stage2_dataset.csv."
+      - "If your terminal is still inside stage_1, move up to the project directory with: cd .."
+      - "Download stage2_dataset.csv from this page. In the Codespace Explorer, right-click the stage_2 folder, choose Upload..., select the downloaded CSV, and confirm that it appears inside stage_2."
+      - "In the terminal, move into the new directory with: cd stage_2"
       - "Create a new script file called stage2_ghost_audit.py inside your stage_2 directory."
       - "Your script should read stage2_dataset.csv."
       - "Keep only rows where status is ACTIVE, authentic is 1, and priority is greater than or equal to 4."
@@ -166,7 +131,7 @@ stages:
       - "Add the value of bias_key."
       - "Take the final total <a href=\"https://en.wikipedia.org/wiki/Modulo\" target=\"_blank\" rel=\"noopener noreferrer\">modulo</a> 1000000."
       - "Print the result as a 6-digit code, including leading zeroes if needed."
-      - "Follow the collaboration requirement shown on this page when submitting your code to AUGUR PODIUM."
+      - "Follow the collaboration requirement shown on this page when submitting your code to the AUGUR PODIUM."
     language_variants:
       python:
         file_name: "stage2_ghost_audit.py"
@@ -189,13 +154,15 @@ stages:
 
       Do not trust a single reading. Do not trust a quick glance. AUGUR is counting on you mistaking noise for evidence.
 
-      Compare the districts. Find where the `signal_strength` pattern breaks. Then recover the district code and submit it to AUGUR PODIUM.
+      Compare the districts. Find where the `signal_strength` pattern breaks. Then recover the district code and submit it to the AUGUR PODIUM.
 
       You remember one of your old lecturers talking about ANOVA for this kind of problem. He did say "It'll come in handy one day!". And damnit, he was right.
 
     instructions:
       - "Create a new directory called stage_3 in your VS Code project."
-      - "Download the Stage 3 dataset from this page and save it in stage_3 as stage3_signal_readings.csv."
+      - "If your terminal is still inside stage_2, move up to the project directory with: cd .."
+      - "Download stage3_signal_readings.csv from this page. In the Codespace Explorer, right-click the stage_3 folder, choose Upload..., select the downloaded CSV, and confirm that it appears inside stage_3."
+      - "In the terminal, move into the new directory with: cd stage_3"
       - "Create a new script file in your preferred programming language inside your stage_3 directory."
       - "Your script should read stage3_signal_readings.csv."
       - "The dataset contains signal readings from several city districts."
@@ -204,9 +171,9 @@ stages:
       - "Shortlist your top post-hoc candidates (typically from the top 3), then use your personal checker to confirm the correct district."
       - "Once you identify the abnormal district, read its district_code value."
       - "Print that district_code as a 6-digit code, including leading zeroes if needed."
-      - "Enter that 6-digit code into AUGUR PODIUM."
+      - "Enter that 6-digit code into the AUGUR PODIUM."
       - "HINT: Mention ANOVA and post-hoc tests explicitly in your chat prompts."
-      - "Follow the collaboration requirement shown on this page when submitting your code to AUGUR PODIUM."
+      - "Follow the collaboration requirement shown on this page when submitting your code to the AUGUR PODIUM."
 
   4:
     title: "Stage 4: Isolate and Capture"
@@ -227,7 +194,9 @@ stages:
       The serial number on that drone is your final personal 6-digit code.
     instructions:
       - "Create a new directory called stage_4 in your VS Code project."
-      - "Download the Stage 4 ZIP dataset from this page and extract it into stage_4."
+      - "If your terminal is still inside stage_3, move up to the project directory with: cd .."
+      - "Download the Stage 4 ZIP dataset from this page. In the Codespace Explorer, right-click the project directory, choose Upload..., select the downloaded ZIP, and confirm that it appears in the project."
+      - "Create stage_4, then extract the ZIP contents into that directory. In the terminal, enter it with: cd stage_4"
       - "Fortunately, AUGUR has left behind a means to extract drone_id and x,y coordinates from each image."
       - "Helper scripts are available at <a href=\"https://github.com/rtreharne/fightthefuture/blob/main/helpers/helper_extract_drone.py\" target=\"_blank\" rel=\"noopener noreferrer\">helpers/helper_extract_drone.py</a> (Python) and <a href=\"https://github.com/rtreharne/fightthefuture/blob/main/helpers/helper_extract_drone.R\" target=\"_blank\" rel=\"noopener noreferrer\">helpers/helper_extract_drone.R</a> (R)."
       - "The ZIP contains 25 PNG camera images, drone_serials.csv, and sanity_check.csv."
@@ -238,4 +207,4 @@ stages:
       - "Identify the drone with the highest overall average distance score."
       - "Find that drone_id in the CSV mapping file."
       - "Read its serial_number and print it as a 6-digit code."
-      - "Follow the collaboration requirement shown on this page when submitting your code to AUGUR PODIUM."
+      - "Follow the collaboration requirement shown on this page when submitting your code to the AUGUR PODIUM."

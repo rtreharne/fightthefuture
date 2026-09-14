@@ -53,10 +53,10 @@ def required_group_size(run: Run, stage: int, available_count: int | None = None
     base_size = configured_group_size(run, stage)
     if available_count is None:
         available_count = Player.objects.filter(run=run, current_stage=stage, is_suspended=False).count()
-    if base_size > 1 and available_count <= 1:
-        # If all other active players are already beyond this stage and nobody is at or below
-        # this stage (except the current single player), collaboration for this stage is impossible.
-        # Allow solo progression to prevent indefinite waiting for a non-existent collaborator.
+    if base_size > 1 and available_count < base_size:
+        # Keep the full requirement while players who are still behind could reach this stage.
+        # Relax it only when all other active players are already ahead, so the remaining
+        # players are genuinely stranded and cannot be joined by anyone else.
         has_players_ahead = Player.objects.filter(
             run=run,
             is_suspended=False,
@@ -68,11 +68,9 @@ def required_group_size(run: Run, stage: int, available_count: int | None = None
             current_stage__lte=stage,
         ).count()
         if has_players_ahead and at_or_below_count <= available_count:
-            return 1
-        return 2
-    if available_count <= 0:
+            return max(1, available_count)
         return base_size
-    return min(base_size, available_count)
+    return base_size
 
 
 def create_new_current_run() -> Run:

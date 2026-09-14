@@ -66,11 +66,17 @@
 <div class="panel">
   <h2 style="margin-top: 0;">Register</h2>
   <p class="muted">Registration is limited to <code>{{ event_domain_label }}</code> email addresses.</p>
+  {% if not registration_closed %}
   <p><strong>Spaces left:</strong> {{ registration_spaces_left }} of {{ registration_limit }}</p>
+  {% endif %}
   {% if registrations_full %}
   <p class="warning"><strong>Registration is currently full.</strong></p>
   {% endif %}
+  {% if registration_closed %}
+  <p class="warning"><strong>Registration has closed.</strong></p>
+  {% endif %}
   <p class="muted">For more information, contact <a href="mailto:R.Treharne@liverpool.ac.uk">R.Treharne@liverpool.ac.uk</a> directly. Robert Treharne is a Senior Lecturer in the School of Biosciences.</p>
+  {% if not registration_closed %}
   <form method="post" action="{% url 'register' %}">
     {% csrf_token %}
     <label for="full_name">Full name</label>
@@ -94,11 +100,12 @@
       value="{{ registration_form_data.email }}"
       autocomplete="email"
       inputmode="email"
-      {% if registrations_full %}disabled{% endif %}
+      {% if registrations_full or registration_closed %}disabled{% endif %}
     >
 
-    <button type="submit" {% if registrations_full %}disabled{% endif %}>Register for Event</button>
+    <button type="submit" {% if registrations_full or registration_closed %}disabled{% endif %}>Register for Event</button>
   </form>
+  {% endif %}
 </div>
 
 <script>
